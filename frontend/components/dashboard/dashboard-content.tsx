@@ -1,19 +1,30 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { StreakCard } from "./streak-card"
 import { ProblemsCard } from "./problems-card"
 import { TasksCard } from "./tasks-card"
 import { TopicDistributionChart } from "./topic-distribution-chart"
 import { WeeklyActivityChart } from "./weekly-activity-chart"
 import { QuickActions } from "./quick-actions"
+import { getAuthUser } from "@/lib/api"
 
 export function DashboardContent() {
+  const [name, setName] = useState("there")
+
+  useEffect(() => {
+    const user = getAuthUser()
+    if (user?.name) {
+      setName(user.name)
+    }
+  }, [])
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
-          Welcome back, John
+          Welcome back, {name}
         </h1>
         <p className="text-muted-foreground">
           Here&apos;s your progress overview for today.

@@ -1,17 +1,53 @@
 "use client"
 
+import { useEffect, useMemo, useState } from "react"
 import { AlertTriangle } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
-
-const weakTopics = [
-  { name: "Dynamic Programming", solved: 12, total: 50, percentage: 24 },
-  { name: "Graphs", solved: 8, total: 35, percentage: 23 },
-  { name: "Tries", solved: 3, total: 15, percentage: 20 },
-  { name: "Backtracking", solved: 5, total: 20, percentage: 25 },
-]
+import { getWeakTopics, type WeakTopicPoint } from "@/lib/api"
 
 export function WeakTopics() {
+  const [weakTopics, setWeakTopics] = useState<WeakTopicPoint[]>([])
+
+  useEffect(() => {
+    let mounted = true
+
+    const load = async () => {
+      try {
+        const response = await getWeakTopics()
+        if (mounted) {
+          setWeakTopics(response.slice(0, 4))
+        }
+      } catch {
+        if (mounted) {
+          setWeakTopics([])
+        }
+      }
+    }
+
+    void load()
+
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const displayTopics = useMemo(
+    () =>
+      weakTopics.map((topic) => {
+        const total = topic.solvedCount + topic.reviseCount
+        const percentage = total > 0 ? Math.round((topic.solvedCount / total) * 100) : 0
+
+        return {
+          name: topic.topic,
+          solved: topic.solvedCount,
+          total,
+          percentage,
+        }
+      }),
+    [weakTopics]
+  )
+
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -21,7 +57,7 @@ export function WeakTopics() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {weakTopics.map((topic) => (
+        {displayTopics.map((topic) => (
           <div key={topic.name} className="space-y-2">
             <div className="flex items-center justify-between text-sm">
               <span className="font-medium">{topic.name}</span>

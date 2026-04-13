@@ -1,15 +1,17 @@
 "use client"
 
+import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts"
 import { cn } from "@/lib/utils"
+import { getTopicBreakdown, type TopicBreakdownPoint } from "@/lib/api"
 
-const data = [
-  { name: "Arrays", value: 45, color: "hsl(var(--primary))" },
-  { name: "Trees", value: 28, color: "hsl(var(--chart-2))" },
-  { name: "Dynamic Programming", value: 35, color: "hsl(var(--chart-3))" },
-  { name: "Graphs", value: 22, color: "hsl(var(--chart-4))" },
-  { name: "Strings", value: 18, color: "hsl(var(--chart-5))" },
+const COLORS = [
+  "hsl(var(--primary))",
+  "hsl(var(--chart-2))",
+  "hsl(var(--chart-3))",
+  "hsl(var(--chart-4))",
+  "hsl(var(--chart-5))",
 ]
 
 interface TopicDistributionChartProps {
@@ -17,6 +19,41 @@ interface TopicDistributionChartProps {
 }
 
 export function TopicDistributionChart({ className }: TopicDistributionChartProps) {
+  const [points, setPoints] = useState<TopicBreakdownPoint[]>([])
+
+  useEffect(() => {
+    let mounted = true
+
+    const load = async () => {
+      try {
+        const response = await getTopicBreakdown()
+        if (mounted) {
+          setPoints(response)
+        }
+      } catch {
+        if (mounted) {
+          setPoints([])
+        }
+      }
+    }
+
+    void load()
+
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const data = useMemo(
+    () =>
+      points.map((item, index) => ({
+        name: item.topic,
+        value: item.solvedCount,
+        color: COLORS[index % COLORS.length],
+      })),
+    [points]
+  )
+
   const total = data.reduce((sum, item) => sum + item.value, 0)
 
   return (
@@ -26,7 +63,7 @@ export function TopicDistributionChart({ className }: TopicDistributionChartProp
       </CardHeader>
       <CardContent className="pt-0">
         <div className="flex flex-col items-center gap-4 lg:flex-row">
-          <div className="h-[200px] w-[200px]">
+          <div className="h-50 w-50">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie

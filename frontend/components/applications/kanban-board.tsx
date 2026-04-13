@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { MoreHorizontal, GripVertical, Calendar, Building2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -13,6 +13,11 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
+import {
+  getApplications,
+  type ApplicationRecord,
+  updateApplicationStatus,
+} from "@/lib/api"
 
 interface Application {
   id: string
@@ -30,93 +35,68 @@ interface Column {
   applications: Application[]
 }
 
-const initialColumns: Column[] = [
-  {
-    id: "applied",
-    title: "Applied",
-    color: "bg-primary",
-    applications: [
-      {
-        id: "1",
-        company: "Google",
-        role: "Software Engineer Intern",
-        date: "Apr 10, 2026",
-        notes: "Referred by alumni",
-      },
-      {
-        id: "2",
-        company: "Meta",
-        role: "Frontend Engineer",
-        date: "Apr 8, 2026",
-      },
-      {
-        id: "3",
-        company: "Amazon",
-        role: "SDE Intern",
-        date: "Apr 5, 2026",
-        notes: "Applied through portal",
-      },
-    ],
-  },
-  {
-    id: "oa",
-    title: "Online Assessment",
-    color: "bg-chart-2",
-    applications: [
-      {
-        id: "4",
-        company: "Microsoft",
-        role: "Software Engineer",
-        date: "Apr 3, 2026",
-        notes: "OA scheduled for Apr 15",
-      },
-      {
-        id: "5",
-        company: "Apple",
-        role: "iOS Developer Intern",
-        date: "Apr 1, 2026",
-      },
-    ],
-  },
-  {
-    id: "interview",
-    title: "Interview",
-    color: "bg-chart-4",
-    applications: [
-      {
-        id: "6",
-        company: "Netflix",
-        role: "Full Stack Engineer",
-        date: "Mar 28, 2026",
-        notes: "Phone screen completed, on-site next week",
-      },
-      {
-        id: "7",
-        company: "Stripe",
-        role: "Backend Engineer",
-        date: "Mar 25, 2026",
-      },
-    ],
-  },
-  {
-    id: "offer",
-    title: "Offer",
-    color: "bg-chart-3",
-    applications: [
-      {
-        id: "8",
-        company: "Vercel",
-        role: "Software Engineer",
-        date: "Mar 20, 2026",
-        notes: "Offer received! $150k base",
-      },
-    ],
-  },
+const EMPTY_COLUMNS: Column[] = [
+  { id: "applied", title: "Applied", color: "bg-primary", applications: [] },
+  { id: "interview", title: "Interview", color: "bg-chart-4", applications: [] },
+  { id: "offer", title: "Offer", color: "bg-chart-3", applications: [] },
+  { id: "rejected", title: "Rejected", color: "bg-chart-5", applications: [] },
 ]
 
-export function KanbanBoard() {
-  const [columns, setColumns] = useState<Column[]>(initialColumns)
+interface KanbanBoardProps {
+  refreshToken: number
+}
+
+function toColumnItem(record: ApplicationRecord): Application {
+  return {
+    id: record._id,
+    company: record.company,
+    role: record.role,
+    date: new Date(record.appliedDate ?? record.createdAt).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }),
+    notes: record.notes[0],
+  }
+}
+
+export function KanbanBoard({ refreshToken }: KanbanBoardProps) {
+  const [columns, setColumns] = useState<Column[]>(EMPTY_COLUMNS)
   const [draggedApp, setDraggedApp] = useState<{ app: Application; fromColumnId: string } | null>(null)
+
+  useEffect(() => {
+    let mounted = true
+
+    const load = async () => {
+      try {
+        const response = await getApplications({ page: 1, limit: 300 })
+
+        if (!mounted) {
+          return
+        }
+
+        const nextColumns = EMPTY_COLUMNS.map((column) => ({ ...column, applications: [] as Application[] }))
+        for (const item of response.items) {
+          const target = nextColumns.find((column) => column.id === item.status)
+          if (target) {
+            target.applications.push(toColumnItem(item))
+          }
+        }
+
+        setColumns(nextColumns)
+      } catch {
+        if (mounted) {
+          setColumns(EMPTY_COLUMNS)
+        }
+      }
+    }
+
+    void load()
+
+    return () => {
+      mounted = false
+    }
+  }, [refreshToken])
 
   const handleDragStart = (app: Application, columnId: string) => {
     setDraggedApp({ app, fromColumnId: columnId })
@@ -126,11 +106,13 @@ export function KanbanBoard() {
     e.preventDefault()
   }
 
-  const handleDrop = (toColumnId: string) => {
+  const handleDrop = async (toColumnId: string) => {
     if (!draggedApp || draggedApp.fromColumnId === toColumnId) {
       setDraggedApp(null)
       return
     }
+
+    const previousColumns = columns
 
     setColumns((prevColumns) => {
       return prevColumns.map((col) => {
@@ -150,18 +132,29 @@ export function KanbanBoard() {
       })
     })
 
+    try {
+      await updateApplicationStatus(
+        draggedApp.app.id,
+        toColumnId as "applied" | "interview" | "rejected" | "offer"
+      )
+    } catch {
+      setColumns(previousColumns)
+    }
+
     setDraggedApp(null)
   }
+
+  const visibleColumns = useMemo(() => columns, [columns])
 
   return (
     <ScrollArea className="w-full whitespace-nowrap rounded-lg">
       <div className="flex gap-4 pb-4">
-        {columns.map((column) => (
+        {visibleColumns.map((column) => (
           <div
             key={column.id}
-            className="w-[300px] shrink-0"
+            className="w-75 shrink-0"
             onDragOver={handleDragOver}
-            onDrop={() => handleDrop(column.id)}
+            onDrop={() => void handleDrop(column.id)}
           >
             <Card className="bg-muted/30">
               <CardHeader className="flex flex-row items-center gap-2 space-y-0 pb-3">

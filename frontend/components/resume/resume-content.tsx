@@ -8,6 +8,11 @@ import { CreateResumeDialog } from "./create-resume-dialog"
 
 export function ResumeContent() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [refreshToken, setRefreshToken] = useState(0)
+
+  const refreshResumes = () => {
+    setRefreshToken((value) => value + 1)
+  }
 
   return (
     <div className="space-y-6">
@@ -28,12 +33,13 @@ export function ResumeContent() {
       </div>
 
       {/* Resume Grid */}
-      <ResumeGrid />
+      <ResumeGrid refreshToken={refreshToken} />
 
       {/* Create Resume Dialog */}
       <CreateResumeDialog
         open={isCreateDialogOpen}
         onOpenChange={setIsCreateDialogOpen}
+        onResumeCreated={refreshResumes}
       />
     </div>
   )

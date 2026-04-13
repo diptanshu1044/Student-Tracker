@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -18,19 +19,54 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { createResume } from "@/lib/api"
 
 interface CreateResumeDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  onResumeCreated: () => void
 }
 
 export function CreateResumeDialog({
   open,
   onOpenChange,
+  onResumeCreated,
 }: CreateResumeDialogProps) {
+  const [name, setName] = useState("")
+  const [targetRole, setTargetRole] = useState("")
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleSubmit = async () => {
+    if (!name.trim()) {
+      setError("Resume name is required")
+      return
+    }
+
+    setSubmitting(true)
+    setError(null)
+
+    try {
+      await createResume({
+        name: name.trim(),
+        content: {},
+        tags: targetRole ? [targetRole] : [],
+      })
+
+      setName("")
+      setTargetRole("")
+      onResumeCreated()
+      onOpenChange(false)
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Failed to create resume")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-106.25">
         <DialogHeader>
           <DialogTitle>Create Resume</DialogTitle>
           <DialogDescription>
@@ -40,7 +76,12 @@ export function CreateResumeDialog({
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
             <Label htmlFor="name">Resume Name</Label>
-            <Input id="name" placeholder="e.g., Frontend Developer" />
+            <Input
+              id="name"
+              placeholder="e.g., Frontend Developer"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="template">Start From</Label>
@@ -58,7 +99,7 @@ export function CreateResumeDialog({
           </div>
           <div className="grid gap-2">
             <Label htmlFor="target">Target Role</Label>
-            <Select>
+            <Select value={targetRole} onValueChange={setTargetRole}>
               <SelectTrigger id="target">
                 <SelectValue placeholder="Select target role" />
               </SelectTrigger>
@@ -71,12 +112,15 @@ export function CreateResumeDialog({
               </SelectContent>
             </Select>
           </div>
+          {error && <p className="text-xs text-destructive">{error}</p>}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={() => onOpenChange(false)}>Create Resume</Button>
+          <Button onClick={() => void handleSubmit()} disabled={submitting}>
+            {submitting ? "Creating..." : "Create Resume"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

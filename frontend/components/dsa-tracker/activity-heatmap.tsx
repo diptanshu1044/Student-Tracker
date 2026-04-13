@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import {
@@ -8,30 +9,58 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-
-// Generate mock data for the heatmap (last 20 weeks)
-function generateHeatmapData() {
-  const data: { date: Date; count: number }[] = []
-  const today = new Date()
-  
-  for (let i = 139; i >= 0; i--) {
-    const date = new Date(today)
-    date.setDate(date.getDate() - i)
-    // Random count between 0 and 8
-    const count = Math.random() < 0.3 ? 0 : Math.floor(Math.random() * 8) + 1
-    data.push({ date, count })
-  }
-  
-  return data
-}
-
-const heatmapData = generateHeatmapData()
+import { getUserProblems, type UserProblemRecord } from "@/lib/api"
 
 interface ActivityHeatmapProps {
   className?: string
 }
 
 export function ActivityHeatmap({ className }: ActivityHeatmapProps) {
+  const [items, setItems] = useState<UserProblemRecord[]>([])
+
+  useEffect(() => {
+    let mounted = true
+
+    const load = async () => {
+      try {
+        const response = await getUserProblems({ page: 1, limit: 1000 })
+        if (mounted) {
+          setItems(response.items)
+        }
+      } catch {
+        if (mounted) {
+          setItems([])
+        }
+      }
+    }
+
+    void load()
+
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const heatmapData = useMemo(() => {
+    const data: { date: Date; count: number }[] = []
+    const today = new Date()
+    const countByDate: Record<string, number> = {}
+
+    for (const item of items) {
+      const key = new Date(item.createdAt).toISOString().slice(0, 10)
+      countByDate[key] = (countByDate[key] ?? 0) + 1
+    }
+
+    for (let i = 139; i >= 0; i--) {
+      const date = new Date(today)
+      date.setDate(date.getDate() - i)
+      const key = date.toISOString().slice(0, 10)
+      data.push({ date, count: countByDate[key] ?? 0 })
+    }
+
+    return data
+  }, [items])
+
   // Group data by weeks
   const weeks: { date: Date; count: number }[][] = []
   for (let i = 0; i < heatmapData.length; i += 7) {

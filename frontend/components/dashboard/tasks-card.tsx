@@ -1,13 +1,43 @@
 "use client"
 
+import { useEffect, useMemo, useState } from "react"
 import { CheckCircle2, Circle, ListTodo } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
+import { getTasks, type TaskRecord } from "@/lib/api"
 
 export function TasksCard() {
-  const completed = 5
-  const total = 8
-  const percentage = Math.round((completed / total) * 100)
+  const [tasks, setTasks] = useState<TaskRecord[]>([])
+
+  useEffect(() => {
+    let mounted = true
+
+    const load = async () => {
+      try {
+        const response = await getTasks({ page: 1, limit: 300 })
+        if (mounted) {
+          setTasks(response.items)
+        }
+      } catch {
+        if (mounted) {
+          setTasks([])
+        }
+      }
+    }
+
+    void load()
+
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const { completed, total } = useMemo(() => {
+    const done = tasks.filter((task) => task.completed).length
+    return { completed: done, total: tasks.length }
+  }, [tasks])
+
+  const percentage = total > 0 ? Math.round((completed / total) * 100) : 0
 
   return (
     <Card>

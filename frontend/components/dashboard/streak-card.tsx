@@ -3,10 +3,34 @@
 import { Flame } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { useEffect, useState } from "react"
+import { getStreak } from "@/lib/api"
 
 export function StreakCard() {
   const [count, setCount] = useState(0)
-  const targetCount = 12
+  const [targetCount, setTargetCount] = useState(0)
+
+  useEffect(() => {
+    let mounted = true
+
+    const load = async () => {
+      try {
+        const streak = await getStreak()
+        if (mounted) {
+          setTargetCount(streak.currentStreak)
+        }
+      } catch {
+        if (mounted) {
+          setTargetCount(0)
+        }
+      }
+    }
+
+    void load()
+
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   useEffect(() => {
     const duration = 1000
@@ -25,10 +49,10 @@ export function StreakCard() {
     }, duration / steps)
 
     return () => clearInterval(timer)
-  }, [])
+  }, [targetCount])
 
   return (
-    <Card className="relative overflow-hidden border-primary/20 bg-gradient-to-br from-primary/5 via-background to-background">
+    <Card className="relative overflow-hidden border-primary/20 bg-linear-to-br from-primary/5 via-background to-background">
       <div className="absolute -top-10 -right-10 size-32 rounded-full bg-primary/10 blur-2xl" />
       <CardContent className="p-6">
         <div className="flex items-center justify-between">
@@ -43,7 +67,7 @@ export function StreakCard() {
               <span className="text-lg text-muted-foreground">days</span>
             </div>
             <p className="text-xs text-muted-foreground">
-              Personal best: 21 days
+              Keep your streak alive today
             </p>
           </div>
           <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/10">
@@ -55,13 +79,13 @@ export function StreakCard() {
             <div
               key={i}
               className={`h-2 flex-1 rounded-full ${
-                i < 5 ? "bg-primary" : "bg-muted"
+                i < Math.min(targetCount, 7) ? "bg-primary" : "bg-muted"
               }`}
             />
           ))}
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
-          5 of 7 days completed this week
+          {Math.min(targetCount, 7)} of 7 days completed this week
         </p>
       </CardContent>
     </Card>

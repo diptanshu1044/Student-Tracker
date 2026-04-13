@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useMemo, useState } from "react"
 import { ExternalLink, MoreHorizontal } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -18,81 +19,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { getUserProblems, type UserProblemRecord } from "@/lib/api"
 
-const problems = [
-  {
-    id: 1,
-    name: "Two Sum",
-    difficulty: "Easy",
-    topic: "Arrays",
-    status: "Solved",
-    date: "2024-01-15",
-    link: "https://leetcode.com/problems/two-sum",
-  },
-  {
-    id: 2,
-    name: "Add Two Numbers",
-    difficulty: "Medium",
-    topic: "Linked Lists",
-    status: "Solved",
-    date: "2024-01-14",
-    link: "https://leetcode.com/problems/add-two-numbers",
-  },
-  {
-    id: 3,
-    name: "Longest Substring Without Repeating Characters",
-    difficulty: "Medium",
-    topic: "Strings",
-    status: "Attempted",
-    date: "2024-01-13",
-    link: "https://leetcode.com/problems/longest-substring-without-repeating-characters",
-  },
-  {
-    id: 4,
-    name: "Median of Two Sorted Arrays",
-    difficulty: "Hard",
-    topic: "Arrays",
-    status: "To Do",
-    date: "2024-01-12",
-    link: "https://leetcode.com/problems/median-of-two-sorted-arrays",
-  },
-  {
-    id: 5,
-    name: "Longest Palindromic Substring",
-    difficulty: "Medium",
-    topic: "Dynamic Programming",
-    status: "Solved",
-    date: "2024-01-11",
-    link: "https://leetcode.com/problems/longest-palindromic-substring",
-  },
-  {
-    id: 6,
-    name: "Container With Most Water",
-    difficulty: "Medium",
-    topic: "Arrays",
-    status: "Solved",
-    date: "2024-01-10",
-    link: "https://leetcode.com/problems/container-with-most-water",
-  },
-  {
-    id: 7,
-    name: "Binary Tree Level Order Traversal",
-    difficulty: "Medium",
-    topic: "Trees",
-    status: "Solved",
-    date: "2024-01-09",
-    link: "https://leetcode.com/problems/binary-tree-level-order-traversal",
-  },
-  {
-    id: 8,
-    name: "Word Search II",
-    difficulty: "Hard",
-    topic: "Tries",
-    status: "Attempted",
-    date: "2024-01-08",
-    link: "https://leetcode.com/problems/word-search-ii",
-  },
-]
+interface DisplayProblem {
+  id: string
+  name: string
+  difficulty: "Easy" | "Medium" | "Hard"
+  topic: string
+  status: "Solved" | "Attempted"
+  date: string
+}
 
 interface ProblemsTableProps {
   filters: {
@@ -100,9 +36,53 @@ interface ProblemsTableProps {
     topic: string
     status: string
   }
+  refreshToken: number
 }
 
-export function ProblemsTable({ filters }: ProblemsTableProps) {
+export function ProblemsTable({ filters, refreshToken }: ProblemsTableProps) {
+  const [records, setRecords] = useState<UserProblemRecord[]>([])
+
+  useEffect(() => {
+    let mounted = true
+
+    const load = async () => {
+      try {
+        const response = await getUserProblems({ page: 1, limit: 500 })
+        if (mounted) {
+          setRecords(response.items)
+        }
+      } catch {
+        if (mounted) {
+          setRecords([])
+        }
+      }
+    }
+
+    void load()
+
+    return () => {
+      mounted = false
+    }
+  }, [refreshToken])
+
+  const problems = useMemo<DisplayProblem[]>(
+    () =>
+      records.map((record) => ({
+        id: record._id,
+        name: record.problemId?.title ?? "Untitled Problem",
+        difficulty:
+          record.problemId?.difficulty === "easy"
+            ? "Easy"
+            : record.problemId?.difficulty === "hard"
+              ? "Hard"
+              : "Medium",
+        topic: record.problemId?.topic ?? "General",
+        status: record.status === "solved" ? "Solved" : "Attempted",
+        date: record.updatedAt,
+      })),
+    [records]
+  )
+
   const filteredProblems = problems.filter((problem) => {
     if (filters.difficulty !== "all" && problem.difficulty.toLowerCase() !== filters.difficulty) {
       return false
@@ -145,27 +125,22 @@ export function ProblemsTable({ filters }: ProblemsTableProps) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[300px]">Problem</TableHead>
+              <TableHead className="w-75">Problem</TableHead>
               <TableHead>Difficulty</TableHead>
               <TableHead>Topic</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Date</TableHead>
-              <TableHead className="w-[50px]"></TableHead>
+              <TableHead className="w-12.5"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredProblems.map((problem) => (
               <TableRow key={problem.id}>
                 <TableCell>
-                  <a
-                    href={problem.link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 font-medium hover:text-primary transition-colors"
-                  >
+                  <div className="flex items-center gap-2 font-medium">
                     {problem.name}
                     <ExternalLink className="size-3 text-muted-foreground" />
-                  </a>
+                  </div>
                 </TableCell>
                 <TableCell>
                   <Badge

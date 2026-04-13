@@ -22,6 +22,12 @@ pnpm dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## API Connection Setup
+
+1. Copy `.env.example` to `.env.local`.
+2. Set `NEXT_PUBLIC_API_BASE_URL` to your backend API base URL (default local value is `http://localhost:8080/api/v1`).
+3. Use Settings > API Authentication in the app to login/register and store `studentos_access_token` automatically.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 ## Learn More

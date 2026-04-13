@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 import { Search, Bell, Moon, Sun } from "lucide-react"
 import { useTheme } from "next-themes"
 
@@ -16,14 +17,41 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { SidebarTrigger } from "@/components/ui/sidebar"
+import { clearAuthTokens, getAuthUser } from "@/lib/api"
 
 export function TopNavbar() {
+  const router = useRouter()
   const { setTheme, theme } = useTheme()
   const [mounted, setMounted] = React.useState(false)
+  const [userName, setUserName] = React.useState("User")
+  const [userEmail, setUserEmail] = React.useState("user@example.com")
 
   React.useEffect(() => {
     setMounted(true)
+
+    const user = getAuthUser()
+    if (user) {
+      setUserName(user.name)
+      setUserEmail(user.email)
+    }
   }, [])
+
+  const initials = React.useMemo(() => {
+    const words = userName.trim().split(/\s+/).filter(Boolean)
+    if (words.length === 0) {
+      return "U"
+    }
+
+    return words
+      .slice(0, 2)
+      .map((word) => word[0]?.toUpperCase() ?? "")
+      .join("")
+  }, [userName])
+
+  const handleLogout = () => {
+    clearAuthTokens()
+    router.replace("/login")
+  }
 
   return (
     <header className="sticky top-0 z-50 flex h-16 items-center gap-4 border-b border-border bg-background/80 px-4 backdrop-blur-sm md:px-6">
@@ -99,7 +127,7 @@ export function TopNavbar() {
               <Avatar className="size-8">
                 <AvatarImage src="/placeholder-avatar.jpg" alt="User" />
                 <AvatarFallback className="bg-primary/10 text-primary">
-                  JD
+                    {initials}
                 </AvatarFallback>
               </Avatar>
             </Button>
@@ -107,9 +135,9 @@ export function TopNavbar() {
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel className="font-normal">
               <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium">John Doe</p>
+                <p className="text-sm font-medium">{userName}</p>
                 <p className="text-xs text-muted-foreground">
-                  john.doe@example.com
+                  {userEmail}
                 </p>
               </div>
             </DropdownMenuLabel>
@@ -117,7 +145,7 @@ export function TopNavbar() {
             <DropdownMenuItem>Profile</DropdownMenuItem>
             <DropdownMenuItem>Settings</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive">
+            <DropdownMenuItem className="text-destructive" onClick={handleLogout}>
               Log out
             </DropdownMenuItem>
           </DropdownMenuContent>

@@ -10,15 +10,62 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
+import {
+  clearAuthTokens,
+  getAuthUser,
+  hasAccessToken,
+  login,
+  register,
+  setAuthSession,
+} from "@/lib/api"
 
 export function SettingsContent() {
+  const currentUser = getAuthUser()
   const { theme, setTheme } = useTheme()
+  const [authMode, setAuthMode] = useState<"login" | "register">("login")
+  const [authForm, setAuthForm] = useState({ name: "", email: "", password: "" })
+  const [authStatus, setAuthStatus] = useState(
+    currentUser?.email ? `Connected as ${currentUser.email}` : hasAccessToken() ? "Connected" : "Not connected"
+  )
+  const [authError, setAuthError] = useState<string | null>(null)
+  const [authLoading, setAuthLoading] = useState(false)
   const [notifications, setNotifications] = useState({
     email: true,
     streak: true,
     applications: true,
     weekly: false,
   })
+
+  const handleAuthSubmit = async () => {
+    setAuthLoading(true)
+    setAuthError(null)
+
+    try {
+      const response =
+        authMode === "register"
+          ? await register({
+              name: authForm.name,
+              email: authForm.email,
+              password: authForm.password,
+            })
+          : await login({
+              email: authForm.email,
+              password: authForm.password,
+            })
+
+      setAuthSession(response)
+      setAuthStatus(`Connected as ${response.user.email}`)
+    } catch (requestError) {
+      setAuthError(requestError instanceof Error ? requestError.message : "Authentication failed")
+    } finally {
+      setAuthLoading(false)
+    }
+  }
+
+  const handleDisconnect = () => {
+    clearAuthTokens()
+    setAuthStatus("Not connected")
+  }
 
   return (
     <div className="space-y-6">
@@ -50,16 +97,19 @@ export function SettingsContent() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="grid gap-2">
                   <Label htmlFor="firstName">First Name</Label>
-                  <Input id="firstName" defaultValue="John" />
+                  <Input id="firstName" defaultValue={currentUser?.name?.split(" ")[0] ?? ""} />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="lastName">Last Name</Label>
-                  <Input id="lastName" defaultValue="Doe" />
+                  <Input
+                    id="lastName"
+                    defaultValue={currentUser?.name?.split(" ").slice(1).join(" ") ?? ""}
+                  />
                 </div>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" defaultValue="john.doe@example.com" />
+                <Input id="email" type="email" defaultValue={currentUser?.email ?? ""} />
               </div>
               <Button>Save Changes</Button>
             </CardContent>
@@ -139,6 +189,78 @@ export function SettingsContent() {
                 </div>
               </div>
               <Button>Update Password</Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Lock className="size-5 text-muted-foreground" />
+                <CardTitle>API Authentication</CardTitle>
+              </div>
+              <CardDescription>
+                Login or register to store backend access tokens locally.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant={authMode === "login" ? "default" : "outline"}
+                  onClick={() => setAuthMode("login")}
+                >
+                  Login
+                </Button>
+                <Button
+                  variant={authMode === "register" ? "default" : "outline"}
+                  onClick={() => setAuthMode("register")}
+                >
+                  Register
+                </Button>
+              </div>
+              {authMode === "register" && (
+                <div className="grid gap-2">
+                  <Label htmlFor="authName">Name</Label>
+                  <Input
+                    id="authName"
+                    value={authForm.name}
+                    onChange={(event) =>
+                      setAuthForm((value) => ({ ...value, name: event.target.value }))
+                    }
+                  />
+                </div>
+              )}
+              <div className="grid gap-2">
+                <Label htmlFor="authEmail">Email</Label>
+                <Input
+                  id="authEmail"
+                  type="email"
+                  value={authForm.email}
+                  onChange={(event) =>
+                    setAuthForm((value) => ({ ...value, email: event.target.value }))
+                  }
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="authPassword">Password</Label>
+                <Input
+                  id="authPassword"
+                  type="password"
+                  value={authForm.password}
+                  onChange={(event) =>
+                    setAuthForm((value) => ({ ...value, password: event.target.value }))
+                  }
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">Status: {authStatus}</p>
+              {authError && <p className="text-xs text-destructive">{authError}</p>}
+              <div className="flex gap-2">
+                <Button onClick={() => void handleAuthSubmit()} disabled={authLoading}>
+                  {authLoading ? "Please wait..." : authMode === "register" ? "Register" : "Login"}
+                </Button>
+                <Button variant="outline" onClick={handleDisconnect}>
+                  Disconnect
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>

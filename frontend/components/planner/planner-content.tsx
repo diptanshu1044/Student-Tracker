@@ -10,6 +10,11 @@ import { AddTaskDialog } from "./add-task-dialog"
 export function PlannerContent() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [selectedDate, setSelectedDate] = useState(new Date())
+  const [refreshToken, setRefreshToken] = useState(0)
+
+  const refreshTasks = () => {
+    setRefreshToken((value) => value + 1)
+  }
 
   return (
     <div className="space-y-6">
@@ -36,7 +41,7 @@ export function PlannerContent() {
           onSelectDate={setSelectedDate}
           className="lg:col-span-2"
         />
-        <TaskList selectedDate={selectedDate} />
+        <TaskList selectedDate={selectedDate} refreshToken={refreshToken} />
       </div>
 
       {/* Add Task Dialog */}
@@ -44,6 +49,7 @@ export function PlannerContent() {
         open={isAddDialogOpen}
         onOpenChange={setIsAddDialogOpen}
         selectedDate={selectedDate}
+        onTaskCreated={refreshTasks}
       />
     </div>
   )

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { GripVertical, MoreHorizontal } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
+import { getTasks, type TaskRecord, updateTaskCompletion } from "@/lib/api"
 
 interface Task {
   id: string
@@ -22,50 +23,97 @@ interface Task {
   completed: boolean
 }
 
-const initialTasks: Task[] = [
-  {
-    id: "1",
-    title: "Solve 3 LeetCode problems",
-    priority: "High",
-    dueTime: "10:00 AM",
-    completed: false,
-  },
-  {
-    id: "2",
-    title: "Review Binary Trees notes",
-    priority: "Medium",
-    dueTime: "2:00 PM",
-    completed: false,
-  },
-  {
-    id: "3",
-    title: "Watch system design video",
-    priority: "Low",
-    dueTime: "4:00 PM",
-    completed: true,
-  },
-  {
-    id: "4",
-    title: "Update resume with new project",
-    priority: "High",
-    dueTime: "6:00 PM",
-    completed: false,
-  },
-]
-
 interface TaskListProps {
   selectedDate: Date
+  refreshToken: number
 }
 
-export function TaskList({ selectedDate }: TaskListProps) {
-  const [tasks, setTasks] = useState<Task[]>(initialTasks)
+function mapTask(record: TaskRecord): Task {
+  const dueDate = record.dueDate ? new Date(record.dueDate) : null
 
-  const toggleTask = (taskId: string) => {
-    setTasks(
-      tasks.map((task) =>
-        task.id === taskId ? { ...task, completed: !task.completed } : task
+  return {
+    id: record._id,
+    title: record.title,
+    priority:
+      record.priority === "high"
+        ? "High"
+        : record.priority === "medium"
+          ? "Medium"
+          : "Low",
+    dueTime: dueDate
+      ? dueDate.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+        })
+      : undefined,
+    completed: record.completed,
+  }
+}
+
+function isSameDay(left: Date, right: Date) {
+  return (
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate()
+  )
+}
+
+export function TaskList({ selectedDate, refreshToken }: TaskListProps) {
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let mounted = true
+
+    const loadTasks = async () => {
+      try {
+        const response = await getTasks({ page: 1, limit: 300 })
+        if (!mounted) {
+          return
+        }
+
+        const nextTasks = response.items
+          .filter((item) => {
+            if (!item.dueDate) {
+              return true
+            }
+
+            return isSameDay(new Date(item.dueDate), selectedDate)
+          })
+          .map(mapTask)
+
+        setTasks(nextTasks)
+        setError(null)
+      } catch (requestError) {
+        if (mounted) {
+          setError(requestError instanceof Error ? requestError.message : "Failed to load tasks")
+        }
+      }
+    }
+
+    void loadTasks()
+
+    return () => {
+      mounted = false
+    }
+  }, [refreshToken, selectedDate])
+
+  const toggleTask = async (taskId: string, completed: boolean) => {
+    setTasks((current) =>
+      current.map((task) =>
+        task.id === taskId ? { ...task, completed } : task
       )
     )
+
+    try {
+      await updateTaskCompletion(taskId, completed)
+    } catch {
+      setTasks((current) =>
+        current.map((task) =>
+          task.id === taskId ? { ...task, completed: !completed } : task
+        )
+      )
+    }
   }
 
   const getPriorityColor = (priority: string) => {
@@ -81,7 +129,7 @@ export function TaskList({ selectedDate }: TaskListProps) {
     }
   }
 
-  const completedCount = tasks.filter((t) => t.completed).length
+  const completedCount = useMemo(() => tasks.filter((t) => t.completed).length, [tasks])
 
   return (
     <Card>
@@ -111,7 +159,7 @@ export function TaskList({ selectedDate }: TaskListProps) {
             <GripVertical className="mt-0.5 size-4 cursor-grab text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
             <Checkbox
               checked={task.completed}
-              onCheckedChange={() => toggleTask(task.id)}
+              onCheckedChange={(checked) => toggleTask(task.id, checked === true)}
               className="mt-0.5"
             />
             <div className="flex-1 space-y-1">
@@ -163,6 +211,7 @@ export function TaskList({ selectedDate }: TaskListProps) {
             <p className="text-sm">Click &quot;Add Task&quot; to create one</p>
           </div>
         )}
+        {error && <p className="text-xs text-destructive">{error}</p>}
       </CardContent>
     </Card>
   )

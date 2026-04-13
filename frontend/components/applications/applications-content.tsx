@@ -9,6 +9,11 @@ import { ApplicationStats } from "./application-stats"
 
 export function ApplicationsContent() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const [refreshToken, setRefreshToken] = useState(0)
+
+  const refreshApplications = () => {
+    setRefreshToken((value) => value + 1)
+  }
 
   return (
     <div className="space-y-6">
@@ -29,15 +34,16 @@ export function ApplicationsContent() {
       </div>
 
       {/* Stats */}
-      <ApplicationStats />
+      <ApplicationStats refreshToken={refreshToken} />
 
       {/* Kanban Board */}
-      <KanbanBoard />
+      <KanbanBoard refreshToken={refreshToken} />
 
       {/* Add Application Dialog */}
       <AddApplicationDialog
         open={isAddDialogOpen}
         onOpenChange={setIsAddDialogOpen}
+        onApplicationCreated={refreshApplications}
       />
     </div>
   )

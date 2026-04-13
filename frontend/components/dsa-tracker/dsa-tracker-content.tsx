@@ -11,11 +11,16 @@ import { AddProblemDialog } from "./add-problem-dialog"
 
 export function DSATrackerContent() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const [refreshToken, setRefreshToken] = useState(0)
   const [filters, setFilters] = useState({
     difficulty: "all",
     topic: "all",
     status: "all",
   })
+
+  const refreshProblems = () => {
+    setRefreshToken((value) => value + 1)
+  }
 
   return (
     <div className="space-y-6">
@@ -45,12 +50,13 @@ export function DSATrackerContent() {
       <ProblemFilters filters={filters} onFiltersChange={setFilters} />
 
       {/* Table */}
-      <ProblemsTable filters={filters} />
+      <ProblemsTable filters={filters} refreshToken={refreshToken} />
 
       {/* Add Problem Dialog */}
       <AddProblemDialog
         open={isAddDialogOpen}
         onOpenChange={setIsAddDialogOpen}
+        onProblemTracked={refreshProblems}
       />
     </div>
   )
