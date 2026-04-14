@@ -8,19 +8,17 @@ import { ProblemsTable } from "./problems-table"
 import { ActivityHeatmap } from "./activity-heatmap"
 import { WeakTopics } from "./weak-topics"
 import { AddProblemDialog } from "./add-problem-dialog"
+import { useDsaStats } from "@/hooks/use-dsa-tracker"
 
 export function DSATrackerContent() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
-  const [refreshToken, setRefreshToken] = useState(0)
+  const { data: stats } = useDsaStats()
   const [filters, setFilters] = useState({
+    search: "",
     difficulty: "all",
     topic: "all",
     status: "all",
   })
-
-  const refreshProblems = () => {
-    setRefreshToken((value) => value + 1)
-  }
 
   return (
     <div className="space-y-6">
@@ -32,6 +30,9 @@ export function DSATrackerContent() {
           </h1>
           <p className="text-muted-foreground">
             Track your problem-solving progress and identify weak areas.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {stats?.totalSolved ?? 0} solved, {stats?.totalAttempted ?? 0} attempted, streak {stats?.currentStreak ?? 0}
           </p>
         </div>
         <Button onClick={() => setIsAddDialogOpen(true)}>
@@ -50,13 +51,12 @@ export function DSATrackerContent() {
       <ProblemFilters filters={filters} onFiltersChange={setFilters} />
 
       {/* Table */}
-      <ProblemsTable filters={filters} refreshToken={refreshToken} />
+      <ProblemsTable filters={filters} />
 
       {/* Add Problem Dialog */}
       <AddProblemDialog
         open={isAddDialogOpen}
         onOpenChange={setIsAddDialogOpen}
-        onProblemTracked={refreshProblems}
       />
     </div>
   )

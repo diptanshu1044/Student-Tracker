@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import {
@@ -9,57 +9,21 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { getUserProblems, type UserProblemRecord } from "@/lib/api"
+import { useDsaActivity } from "@/hooks/use-dsa-tracker"
 
 interface ActivityHeatmapProps {
   className?: string
 }
 
 export function ActivityHeatmap({ className }: ActivityHeatmapProps) {
-  const [items, setItems] = useState<UserProblemRecord[]>([])
-
-  useEffect(() => {
-    let mounted = true
-
-    const load = async () => {
-      try {
-        const response = await getUserProblems({ page: 1, limit: 1000 })
-        if (mounted) {
-          setItems(response.items)
-        }
-      } catch {
-        if (mounted) {
-          setItems([])
-        }
-      }
-    }
-
-    void load()
-
-    return () => {
-      mounted = false
-    }
-  }, [])
+  const { data: activity = [], isLoading } = useDsaActivity()
 
   const heatmapData = useMemo(() => {
-    const data: { date: Date; count: number }[] = []
-    const today = new Date()
-    const countByDate: Record<string, number> = {}
-
-    for (const item of items) {
-      const key = new Date(item.createdAt).toISOString().slice(0, 10)
-      countByDate[key] = (countByDate[key] ?? 0) + 1
-    }
-
-    for (let i = 139; i >= 0; i--) {
-      const date = new Date(today)
-      date.setDate(date.getDate() - i)
-      const key = date.toISOString().slice(0, 10)
-      data.push({ date, count: countByDate[key] ?? 0 })
-    }
-
-    return data
-  }, [items])
+    return activity.map((point) => ({
+      date: new Date(`${point.date}T00:00:00.000Z`),
+      count: point.count,
+    }))
+  }, [activity])
 
   // Group data by weeks
   const weeks: { date: Date; count: number }[][] = []
@@ -117,8 +81,11 @@ export function ActivityHeatmap({ className }: ActivityHeatmapProps) {
             </div>
           </div>
         </TooltipProvider>
+        {!isLoading && heatmapData.length === 0 && (
+          <p className="mt-3 text-sm text-muted-foreground">No activity yet. Start by adding your first problem.</p>
+        )}
         <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-          <span>20 weeks ago</span>
+          <span>180 days ago</span>
           <div className="flex items-center gap-1">
             <span>Less</span>
             <div className="flex gap-0.5">

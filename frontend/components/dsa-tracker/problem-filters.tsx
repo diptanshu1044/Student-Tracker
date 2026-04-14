@@ -12,11 +12,12 @@ import {
 
 interface ProblemFiltersProps {
   filters: {
+    search: string
     difficulty: string
     topic: string
     status: string
   }
-  onFiltersChange: (filters: { difficulty: string; topic: string; status: string }) => void
+  onFiltersChange: (filters: { search: string; difficulty: string; topic: string; status: string }) => void
 }
 
 export function ProblemFilters({ filters, onFiltersChange }: ProblemFiltersProps) {
@@ -28,6 +29,8 @@ export function ProblemFilters({ filters, onFiltersChange }: ProblemFiltersProps
           type="search"
           placeholder="Search problems..."
           className="pl-9"
+          value={filters.search}
+          onChange={(event) => onFiltersChange({ ...filters, search: event.target.value })}
         />
       </div>
       <div className="flex flex-wrap gap-2">
@@ -37,7 +40,7 @@ export function ProblemFilters({ filters, onFiltersChange }: ProblemFiltersProps
             onFiltersChange({ ...filters, difficulty: value })
           }
         >
-          <SelectTrigger className="w-[130px]">
+          <SelectTrigger className="w-32.5">
             <SelectValue placeholder="Difficulty" />
           </SelectTrigger>
           <SelectContent>
@@ -54,7 +57,7 @@ export function ProblemFilters({ filters, onFiltersChange }: ProblemFiltersProps
             onFiltersChange({ ...filters, topic: value })
           }
         >
-          <SelectTrigger className="w-[130px]">
+          <SelectTrigger className="w-32.5">
             <SelectValue placeholder="Topic" />
           </SelectTrigger>
           <SelectContent>
@@ -74,14 +77,14 @@ export function ProblemFilters({ filters, onFiltersChange }: ProblemFiltersProps
             onFiltersChange({ ...filters, status: value })
           }
         >
-          <SelectTrigger className="w-[130px]">
+          <SelectTrigger className="w-32.5">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Status</SelectItem>
             <SelectItem value="solved">Solved</SelectItem>
             <SelectItem value="attempted">Attempted</SelectItem>
-            <SelectItem value="todo">To Do</SelectItem>
+            <SelectItem value="revision">Revision</SelectItem>
           </SelectContent>
         </Select>
       </div>

@@ -16,6 +16,8 @@ export interface StreakData {
   lastActiveDate: string | null
 }
 
+export type DsaProblemStatus = "solved" | "attempted" | "revision" | "revise"
+
 export interface WeeklySolvedPoint {
   year: number
   week: number
@@ -34,6 +36,29 @@ export interface WeakTopicPoint {
   solvedCount: number
 }
 
+export interface DsaWeakTopicPoint {
+  topic: string
+  totalAttempts: number
+  totalSolved: number
+  totalProblems: number
+  solveRate: number
+  avgAttempts: number
+  score: number
+}
+
+export interface DsaActivityPoint {
+  date: string
+  count: number
+}
+
+export interface DsaStats {
+  totalSolved: number
+  totalAttempted: number
+  totalProblems: number
+  currentStreak: number
+  longestStreak: number
+}
+
 export interface ProblemRecord {
   _id: string
   title?: string
@@ -44,8 +69,10 @@ export interface ProblemRecord {
 
 export interface UserProblemRecord {
   _id: string
-  status: "solved" | "revise"
+  status: DsaProblemStatus
   attempts: number
+  notes?: string[]
+  date?: string
   createdAt: string
   updatedAt: string
   problemId: ProblemRecord
@@ -255,9 +282,16 @@ export async function getProblems(query?: {
   page?: number
   limit?: number
 }) {
-  return apiRequest<PaginatedResponse<ProblemRecord>>(withQuery("/dsa/problems", query), {
+  return apiRequest<PaginatedResponse<ProblemRecord>>(withQuery("/dsa/catalog", query), {
     auth: false,
   })
+}
+
+export async function getProblemCatalog(query?: {
+  page?: number
+  limit?: number
+}) {
+  return getProblems(query)
 }
 
 export async function getWeeklySolved() {
@@ -275,21 +309,58 @@ export async function getWeakTopics() {
 export async function getUserProblems(query?: {
   page?: number
   limit?: number
-  status?: "solved" | "revise"
+  difficulty?: "easy" | "medium" | "hard"
+  topic?: string
+  status?: DsaProblemStatus
+  search?: string
 }) {
-  return apiRequest<PaginatedResponse<UserProblemRecord>>(withQuery("/dsa/user-problems", query))
+  return apiRequest<PaginatedResponse<UserProblemRecord>>(withQuery("/dsa/problems", query))
 }
 
 export async function trackUserProblem(input: {
   problemId: string
-  status: "solved" | "revise"
+  status: DsaProblemStatus
   attempts?: number
-  lastSolvedAt?: string
+  date?: string
+  notes?: string
 }) {
-  return apiRequest<UserProblemRecord>("/dsa/user-problems", {
+  return apiRequest<UserProblemRecord>("/dsa/problems", {
     method: "POST",
     body: JSON.stringify(input),
   })
+}
+
+export async function updateUserProblem(
+  id: string,
+  input: {
+    status?: DsaProblemStatus
+    attempts?: number
+    date?: string
+    notes?: string
+  }
+) {
+  return apiRequest<UserProblemRecord>(`/dsa/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  })
+}
+
+export async function deleteUserProblem(id: string) {
+  return apiRequest<{ deleted: true }>(`/dsa/${id}`, {
+    method: "DELETE",
+  })
+}
+
+export async function getDsaActivity() {
+  return apiRequest<DsaActivityPoint[]>("/dsa/activity")
+}
+
+export async function getDsaWeakTopics() {
+  return apiRequest<DsaWeakTopicPoint[]>("/dsa/weak-topics")
+}
+
+export async function getDsaStats() {
+  return apiRequest<DsaStats>("/dsa/stats")
 }
 
 export async function getTasks(query?: {

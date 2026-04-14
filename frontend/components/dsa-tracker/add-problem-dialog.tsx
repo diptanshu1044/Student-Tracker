@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -20,48 +21,30 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { getProblems, trackUserProblem, type ProblemRecord } from "@/lib/api"
+import { type ProblemRecord } from "@/lib/api"
+import { useCreateDsaProblemLog, useDsaProblemCatalog } from "@/hooks/use-dsa-tracker"
 
 interface AddProblemDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onProblemTracked: () => void
 }
 
-export function AddProblemDialog({ open, onOpenChange, onProblemTracked }: AddProblemDialogProps) {
-  const [problems, setProblems] = useState<ProblemRecord[]>([])
+export function AddProblemDialog({ open, onOpenChange }: AddProblemDialogProps) {
   const [problemId, setProblemId] = useState("")
-  const [status, setStatus] = useState<"solved" | "revise">("solved")
+  const [status, setStatus] = useState<"solved" | "attempted" | "revision">("attempted")
   const [attempts, setAttempts] = useState("1")
   const [notes, setNotes] = useState("")
   const [error, setError] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
+  const { data: catalogData } = useDsaProblemCatalog(500)
+  const createLogMutation = useCreateDsaProblemLog()
+
+  const problems = useMemo<ProblemRecord[]>(() => catalogData?.items ?? [], [catalogData?.items])
 
   useEffect(() => {
-    let mounted = true
-
-    const loadProblems = async () => {
-      try {
-        const response = await getProblems({ page: 1, limit: 500 })
-        if (mounted) {
-          setProblems(response.items)
-          if (!problemId && response.items.length > 0) {
-            setProblemId(response.items[0]._id)
-          }
-        }
-      } catch {
-        if (mounted) {
-          setProblems([])
-        }
-      }
+    if (open && !problemId && problems.length > 0) {
+      setProblemId(problems[0]._id)
     }
-
-    void loadProblems()
-
-    return () => {
-      mounted = false
-    }
-  }, [open])
+  }, [open, problemId, problems])
 
   const selectedProblem = useMemo(
     () => problems.find((problem) => problem._id === problemId),
@@ -74,25 +57,26 @@ export function AddProblemDialog({ open, onOpenChange, onProblemTracked }: AddPr
       return
     }
 
-    setSubmitting(true)
     setError(null)
 
     try {
-      await trackUserProblem({
+      await createLogMutation.mutateAsync({
         problemId,
         status,
         attempts: Number(attempts) || 1,
-        lastSolvedAt: status === "solved" ? new Date().toISOString() : undefined,
+        date: new Date().toISOString(),
+        notes: notes.trim() || undefined,
       })
 
+      toast.success("Problem logged successfully")
+      setStatus("attempted")
       setNotes("")
       setAttempts("1")
-      onProblemTracked()
       onOpenChange(false)
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Failed to track problem")
-    } finally {
-      setSubmitting(false)
+      const message = requestError instanceof Error ? requestError.message : "Failed to track problem"
+      setError(message)
+      toast.error(message)
     }
   }
 
@@ -133,13 +117,17 @@ export function AddProblemDialog({ open, onOpenChange, onProblemTracked }: AddPr
           </div>
           <div className="grid gap-2">
             <Label htmlFor="status">Status</Label>
-            <Select value={status} onValueChange={(value: "solved" | "revise") => setStatus(value)}>
+            <Select
+              value={status}
+              onValueChange={(value: "solved" | "attempted" | "revision") => setStatus(value)}
+            >
               <SelectTrigger id="status">
                 <SelectValue placeholder="Select" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="solved">Solved</SelectItem>
-                <SelectItem value="revise">Need Revision</SelectItem>
+                <SelectItem value="attempted">Attempted</SelectItem>
+                <SelectItem value="revision">Need Revision</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -170,8 +158,8 @@ export function AddProblemDialog({ open, onOpenChange, onProblemTracked }: AddPr
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={() => void handleSubmit()} disabled={submitting}>
-            {submitting ? "Saving..." : "Add Problem"}
+          <Button onClick={() => void handleSubmit()} disabled={createLogMutation.isPending}>
+            {createLogMutation.isPending ? "Saving..." : "Add Problem"}
           </Button>
         </DialogFooter>
       </DialogContent>
