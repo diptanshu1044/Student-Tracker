@@ -19,7 +19,13 @@ interface ListTrackedProblemsInput {
 
 interface TrackInput {
   userId: string;
-  problemId: string;
+  problemId?: string;
+  createProblem?: {
+    title: string;
+    platform: "leetcode" | "gfg";
+    difficulty: "easy" | "medium" | "hard";
+    topic: string;
+  };
   status: ProblemStatus;
   attempts?: number;
   date?: string;
@@ -136,29 +142,77 @@ export async function listTrackedProblems(input: ListTrackedProblemsInput) {
 
 export async function trackProblem(input: TrackInput) {
   const userId = new Types.ObjectId(input.userId);
-  const problemId = new Types.ObjectId(input.problemId);
   const attemptsToAdd = Math.max(1, input.attempts ?? 1);
   const status = normalizeStatus(input.status);
   const date = input.date ? new Date(input.date) : new Date();
   const note = input.notes?.trim();
 
-  const problemExists = await ProblemModel.exists({ _id: problemId });
-  if (!problemExists) {
-    throw new AppError("Problem not found", StatusCodes.NOT_FOUND);
+  let resolvedProblemId: Types.ObjectId;
+
+  if (input.problemId) {
+    resolvedProblemId = new Types.ObjectId(input.problemId);
+    const problemExists = await ProblemModel.exists({ _id: resolvedProblemId });
+    if (!problemExists) {
+      throw new AppError("Problem not found", StatusCodes.NOT_FOUND);
+    }
+  } else if (input.createProblem) {
+    const title = input.createProblem.title.trim();
+    const topic = input.createProblem.topic.trim();
+
+    let problem = await ProblemModel.findOne({
+      title,
+      platform: input.createProblem.platform
+    });
+
+    if (!problem) {
+      try {
+        problem = await ProblemModel.create({
+          title,
+          platform: input.createProblem.platform,
+          difficulty: input.createProblem.difficulty,
+          topic
+        });
+      } catch (error) {
+        if (
+          error &&
+          typeof error === "object" &&
+          "code" in error &&
+          Number((error as { code?: unknown }).code) === 11000
+        ) {
+          problem = await ProblemModel.findOne({
+            title,
+            platform: input.createProblem.platform
+          });
+        } else {
+          throw error;
+        }
+      }
+    }
+
+    if (!problem) {
+      throw new AppError("Failed to create problem", StatusCodes.BAD_REQUEST);
+    }
+
+    resolvedProblemId = problem._id;
+  } else {
+    throw new AppError("Either problemId or createProblem is required", StatusCodes.BAD_REQUEST);
   }
 
-  const existing = await UserProblemModel.findOne({ userId, problemId });
+  const existing = await UserProblemModel.findOne({ userId, problemId: resolvedProblemId });
 
   if (!existing) {
-    return UserProblemModel.create({
+    const created = await UserProblemModel.create({
       userId,
-      problemId,
+      problemId: resolvedProblemId,
       status,
       attempts: attemptsToAdd,
       notes: note ? [note] : [],
       date,
       lastSolvedAt: status === "solved" ? date : undefined
     });
+
+    await created.populate("problemId");
+    return created;
   }
 
   existing.attempts += attemptsToAdd;

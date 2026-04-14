@@ -14,22 +14,36 @@ import {
 } from "./dsa.controller";
 
 const statusEnum = z.enum(["solved", "attempted", "revision", "revise"]);
+const difficultyEnum = z.enum(["easy", "medium", "hard"]);
+const platformEnum = z.enum(["leetcode", "gfg"]);
+
+const createProblemSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  platform: platformEnum,
+  difficulty: difficultyEnum,
+  topic: z.string().trim().min(1).max(100)
+});
 
 const createProblemLogSchema = z.object({
-  body: z.object({
-    problemId: z.string().min(12),
-    status: statusEnum,
-    attempts: z.number().int().min(1).optional(),
-    date: z.string().datetime().optional(),
-    notes: z.string().max(1000).optional()
-  })
+  body: z
+    .object({
+      problemId: z.string().min(12).optional(),
+      createProblem: createProblemSchema.optional(),
+      status: statusEnum,
+      attempts: z.number().int().min(1).optional(),
+      date: z.string().datetime().optional(),
+      notes: z.string().max(1000).optional()
+    })
+    .refine((value) => Boolean(value.problemId || value.createProblem), {
+      message: "Either problemId or createProblem must be provided"
+    })
 });
 
 const listProblemsSchema = z.object({
   query: z.object({
     page: z.coerce.number().int().min(1).optional(),
     limit: z.coerce.number().int().min(1).max(100).optional(),
-    difficulty: z.enum(["easy", "medium", "hard"]).optional(),
+    difficulty: difficultyEnum.optional(),
     topic: z.string().min(1).optional(),
     status: statusEnum.optional(),
     search: z.string().min(1).optional()

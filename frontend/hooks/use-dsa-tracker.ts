@@ -14,7 +14,9 @@ import {
   getProblemCatalog,
   getUserProblems,
   trackUserProblem,
+  type ProblemRecord,
   updateUserProblem,
+  type TrackUserProblemInput,
   type DsaProblemStatus,
   type UserProblemRecord,
 } from "@/lib/api"
@@ -109,7 +111,7 @@ export function useCreateDsaProblemLog() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: trackUserProblem,
+    mutationFn: (input: TrackUserProblemInput) => trackUserProblem(input),
     onMutate: async (variables) => {
       await queryClient.cancelQueries({ queryKey: [...dsaQueryKeys.all, "problems"] })
 
@@ -123,6 +125,24 @@ export function useCreateDsaProblemLog() {
         }
 
         const typed = value as { items: UserProblemRecord[]; total: number; page: number; limit: number }
+
+        const optimisticProblem: ProblemRecord =
+          "createProblem" in variables && variables.createProblem
+            ? {
+                _id: `optimistic-problem-${Date.now()}`,
+                title: variables.createProblem.title,
+                difficulty: variables.createProblem.difficulty,
+                topic: variables.createProblem.topic,
+                platform: variables.createProblem.platform,
+              }
+            : {
+                _id: variables.problemId,
+                title: "Saving...",
+                difficulty: "medium",
+                topic: "General",
+                platform: "leetcode",
+              }
+
         const optimisticItem: UserProblemRecord = {
           _id: `optimistic-${Date.now()}`,
           status: variables.status,
@@ -131,12 +151,7 @@ export function useCreateDsaProblemLog() {
           date: variables.date ?? new Date().toISOString(),
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
-          problemId: {
-            _id: variables.problemId,
-            title: "Saving...",
-            difficulty: "medium",
-            topic: "General",
-          },
+          problemId: optimisticProblem,
         }
 
         queryClient.setQueryData(queryKey as QueryKey, {

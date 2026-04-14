@@ -2,9 +2,12 @@
   "name": "my-project",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22 <24"
+  },
   "scripts": {
-    "dev": "NODE_OPTIONS= next dev",
-    "dev:cn": "next dev",
+    "dev": "next dev --webpack",
+    "dev:turbopack": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint ."

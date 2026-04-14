@@ -78,6 +78,31 @@ export interface UserProblemRecord {
   problemId: ProblemRecord
 }
 
+export interface CreateProblemInput {
+  title: string
+  platform: "leetcode" | "gfg"
+  difficulty: "easy" | "medium" | "hard"
+  topic: string
+}
+
+export type TrackUserProblemInput =
+  | {
+      problemId: string
+      createProblem?: never
+      status: DsaProblemStatus
+      attempts?: number
+      date?: string
+      notes?: string
+    }
+  | {
+      problemId?: never
+      createProblem: CreateProblemInput
+      status: DsaProblemStatus
+      attempts?: number
+      date?: string
+      notes?: string
+    }
+
 export interface TaskRecord {
   _id: string
   title: string
@@ -317,13 +342,7 @@ export async function getUserProblems(query?: {
   return apiRequest<PaginatedResponse<UserProblemRecord>>(withQuery("/dsa/problems", query))
 }
 
-export async function trackUserProblem(input: {
-  problemId: string
-  status: DsaProblemStatus
-  attempts?: number
-  date?: string
-  notes?: string
-}) {
+export async function trackUserProblem(input: TrackUserProblemInput) {
   return apiRequest<UserProblemRecord>("/dsa/problems", {
     method: "POST",
     body: JSON.stringify(input),
