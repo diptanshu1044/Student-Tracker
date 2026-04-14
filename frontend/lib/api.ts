@@ -137,6 +137,7 @@ export interface ResumeRecord {
 
 interface RequestOptions extends RequestInit {
   auth?: boolean
+  skipAuthRefresh?: boolean
 }
 
 export interface AuthUser {
@@ -181,6 +182,56 @@ function getAccessToken(): string | null {
   }
 
   return process.env.NEXT_PUBLIC_ACCESS_TOKEN ?? null
+}
+
+function getRefreshToken(): string | null {
+  if (typeof window === "undefined") {
+    return null
+  }
+
+  return window.localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY)
+}
+
+function forceLogout() {
+  clearAuthTokens()
+
+  if (typeof window !== "undefined") {
+    window.location.assign("/login")
+  }
+}
+
+let refreshInFlight: Promise<string | null> | null = null
+
+async function tryRefreshAccessToken(): Promise<string | null> {
+  if (refreshInFlight) {
+    return refreshInFlight
+  }
+
+  refreshInFlight = (async () => {
+    const refreshToken = getRefreshToken()
+    if (!refreshToken) {
+      return null
+    }
+
+    try {
+      const tokens = await apiRequest<AuthTokens>("/auth/refresh", {
+        method: "POST",
+        auth: false,
+        skipAuthRefresh: true,
+        body: JSON.stringify({ refreshToken }),
+      })
+
+      setAuthTokens(tokens)
+      return tokens.accessToken
+    } catch {
+      clearAuthTokens()
+      return null
+    } finally {
+      refreshInFlight = null
+    }
+  })()
+
+  return refreshInFlight
 }
 
 export function setAuthTokens(tokens: AuthTokens) {
@@ -230,10 +281,15 @@ export function getAuthUser(): AuthUser | null {
 }
 
 async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { auth = true, headers, ...rest } = options
-  const token = getAccessToken()
+  const { auth = true, skipAuthRefresh = false, headers, ...rest } = options
+  let token = getAccessToken()
+
+  if (auth && !token && !skipAuthRefresh) {
+    token = await tryRefreshAccessToken()
+  }
 
   if (auth && !token) {
+    forceLogout()
     throw new Error(
       "Missing access token. Set localStorage key 'studentos_access_token' or NEXT_PUBLIC_ACCESS_TOKEN."
     )
@@ -249,10 +305,30 @@ async function apiRequest<T>(path: string, options: RequestOptions = {}): Promis
     cache: "no-store",
   })
 
-  const payload = (await response.json()) as ApiEnvelope<T>
+  let payload: ApiEnvelope<T> | null = null
+  try {
+    payload = (await response.json()) as ApiEnvelope<T>
+  } catch {
+    payload = null
+  }
 
-  if (!response.ok || !payload.success || payload.data === null) {
-    throw new Error(payload.error ?? `Request failed with status ${response.status}`)
+  if (auth && response.status === 401 && !skipAuthRefresh) {
+    const refreshedToken = await tryRefreshAccessToken()
+
+    if (refreshedToken) {
+      return apiRequest<T>(path, {
+        ...options,
+        skipAuthRefresh: true,
+      })
+    }
+  }
+
+  if (auth && response.status === 401) {
+    forceLogout()
+  }
+
+  if (!response.ok || !payload?.success || payload.data === null) {
+    throw new Error(payload?.error ?? `Request failed with status ${response.status}`)
   }
 
   return payload.data
