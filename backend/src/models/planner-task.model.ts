@@ -43,6 +43,5 @@ const plannerTaskSchema = new Schema<PlannerTaskDoc>(
 plannerTaskSchema.index({ userId: 1, startTime: 1 });
 plannerTaskSchema.index({ userId: 1, profileId: 1, startTime: 1 });
 plannerTaskSchema.index({ userId: 1, reminderTime: 1, notified: 1 });
-plannerTaskSchema.index({ userId: 1, profileId: 1, title: 1, startTime: 1 }, { unique: true });
 
 export const PlannerTaskModel = model<PlannerTaskDoc>("PlannerTask", plannerTaskSchema);

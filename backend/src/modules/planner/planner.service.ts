@@ -1,5 +1,6 @@
 import { StatusCodes } from "http-status-codes";
 import { Types } from "mongoose";
+import { env } from "../../config/env";
 import { PlannerProfileModel } from "../../models/planner-profile.model";
 import {
   PlannerTaskModel,
@@ -98,35 +99,10 @@ async function ensureProfileOwner(userId: string, profileId: string) {
   return profile;
 }
 
-async function ensureNoOverlap(input: {
-  userId: string;
-  profileId: string;
-  startTime: Date;
-  endTime: Date;
-  excludeTaskId?: string;
-}) {
-  const query: Record<string, unknown> = {
-    userId: new Types.ObjectId(input.userId),
-    profileId: new Types.ObjectId(input.profileId),
-    startTime: { $lt: input.endTime },
-    endTime: { $gt: input.startTime }
-  };
-
-  if (input.excludeTaskId) {
-    query._id = { $ne: new Types.ObjectId(input.excludeTaskId) };
-  }
-
-  const conflict = await PlannerTaskModel.findOne(query).select("_id");
-
-  if (conflict) {
-    throw new AppError("Task overlaps with an existing task in this profile", StatusCodes.CONFLICT);
-  }
-}
-
 async function getOrCreateDefaultProfile(userId: string) {
   const existing = await PlannerProfileModel.findOne({
     userId: new Types.ObjectId(userId),
-    name: "Study Planner"
+    name: env.PLANNER_DEFAULT_PROFILE_NAME
   });
 
   if (existing) {
@@ -135,9 +111,9 @@ async function getOrCreateDefaultProfile(userId: string) {
 
   return PlannerProfileModel.create({
     userId,
-    name: "Study Planner",
-    description: "Default planner profile for quick task capture",
-    color: "#2563eb"
+    name: env.PLANNER_DEFAULT_PROFILE_NAME,
+    description: env.PLANNER_DEFAULT_PROFILE_DESCRIPTION,
+    color: env.PLANNER_DEFAULT_PROFILE_COLOR
   });
 }
 
@@ -151,7 +127,13 @@ export async function createPlannerProfile(input: CreatePlannerProfileInput) {
 }
 
 export async function listPlannerProfiles(userId: string) {
-  return PlannerProfileModel.find({ userId: new Types.ObjectId(userId) }).sort({ createdAt: -1 });
+  const profiles = await PlannerProfileModel.find({ userId: new Types.ObjectId(userId) }).sort({ createdAt: 1 });
+
+  if (profiles.length === 0 && env.PLANNER_AUTO_CREATE_DEFAULT_PROFILE) {
+    return [await getOrCreateDefaultProfile(userId)];
+  }
+
+  return profiles;
 }
 
 export async function updatePlannerProfile(input: UpdatePlannerProfileInput) {
@@ -196,13 +178,6 @@ export async function createPlannerTask(input: CreatePlannerTaskInput) {
     throw new AppError("reminderTime must be a valid ISO datetime", StatusCodes.BAD_REQUEST);
   }
 
-  await ensureNoOverlap({
-    userId: input.userId,
-    profileId: input.profileId,
-    startTime,
-    endTime
-  });
-
   const task = await PlannerTaskModel.create({
     userId: input.userId,
     profileId: input.profileId,
@@ -234,16 +209,6 @@ export async function updatePlannerTask(input: UpdatePlannerTaskInput) {
   const nextStart = input.startTime ? new Date(input.startTime) : current.startTime;
   const nextEnd = input.endTime ? new Date(input.endTime) : current.endTime;
   validateWindow(nextStart, nextEnd);
-
-  if (input.startTime || input.endTime) {
-    await ensureNoOverlap({
-      userId: input.userId,
-      profileId: current.profileId.toString(),
-      startTime: nextStart,
-      endTime: nextEnd,
-      excludeTaskId: current._id.toString()
-    });
-  }
 
   const reminderTime = input.reminderTime === undefined
     ? current.reminderTime

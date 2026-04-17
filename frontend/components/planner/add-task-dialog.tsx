@@ -22,6 +22,8 @@ import {
 import { createPlannerTask, createTask } from "@/lib/api"
 import { toast } from "sonner"
 
+type SchedulingMode = "single" | "range" | "selective"
+
 interface AddTaskDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -41,8 +43,35 @@ export function AddTaskDialog({
   const [priority, setPriority] = useState<"low" | "medium" | "high">("medium")
   const [type, setType] = useState<"dsa" | "job" | "study">("study")
   const [time, setTime] = useState("")
+  const [schedulingMode, setSchedulingMode] = useState<SchedulingMode>("single")
+  const [rangeStart, setRangeStart] = useState(selectedDate.toISOString().slice(0, 10))
+  const [rangeEnd, setRangeEnd] = useState(selectedDate.toISOString().slice(0, 10))
+  const [selectedDates, setSelectedDates] = useState<string[]>([selectedDate.toISOString().slice(0, 10)])
+  const [draftDate, setDraftDate] = useState(selectedDate.toISOString().slice(0, 10))
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const buildDate = (dateString: string) => {
+    const date = new Date(`${dateString}T00:00:00`)
+    if (time) {
+      const [hours, minutes] = time.split(":").map(Number)
+      date.setHours(hours, minutes, 0, 0)
+    } else {
+      date.setHours(9, 0, 0, 0)
+    }
+    return date
+  }
+
+  const uniqueDates = (dates: string[]) => Array.from(new Set(dates)).sort()
+
+  const addDraftDate = () => {
+    if (!draftDate) {
+      return
+    }
+
+    setSelectedDates((current) => uniqueDates([...current, draftDate]))
+    setDraftDate("")
+  }
 
   const handleSubmit = async () => {
     if (!title.trim()) {
@@ -56,34 +85,64 @@ export function AddTaskDialog({
     setError(null)
 
     try {
-      const dueDate = new Date(selectedDate)
+      let datesToCreate: string[] = []
 
-      if (time) {
-        const [hours, minutes] = time.split(":").map(Number)
-        dueDate.setHours(hours, minutes, 0, 0)
+      if (schedulingMode === "single") {
+        datesToCreate = [selectedDate.toISOString().slice(0, 10)]
       }
 
-      if (profileId) {
-        const endTime = new Date(dueDate.getTime() + 60 * 60 * 1000)
-        await createPlannerTask({
-          profileId,
-          title: title.trim(),
-          description: `${type.toUpperCase()} task`,
-          startTime: dueDate.toISOString(),
-          endTime: endTime.toISOString(),
-          priority,
-        })
-      } else {
+      if (schedulingMode === "range") {
+        const current = new Date(`${rangeStart}T00:00:00`)
+        const end = new Date(`${rangeEnd}T00:00:00`)
+
+        if (Number.isNaN(current.getTime()) || Number.isNaN(end.getTime()) || current > end) {
+          throw new Error("Select a valid date range")
+        }
+
+        while (current <= end) {
+          datesToCreate.push(current.toISOString().slice(0, 10))
+          current.setDate(current.getDate() + 1)
+        }
+      }
+
+      if (schedulingMode === "selective") {
+        datesToCreate = uniqueDates(selectedDates)
+      }
+
+      if (datesToCreate.length === 0) {
+        throw new Error("Add at least one date")
+      }
+
+      for (const dateString of datesToCreate) {
+        const startDate = buildDate(dateString)
+        const endDate = new Date(startDate.getTime() + 60 * 60 * 1000)
+
+        if (profileId) {
+          await createPlannerTask({
+            profileId,
+            title: title.trim(),
+            description: `${type.toUpperCase()} task`,
+            startTime: startDate.toISOString(),
+            endTime: endDate.toISOString(),
+            priority,
+          })
+          continue
+        }
+
         await createTask({
           title: title.trim(),
           type,
           priority,
-          dueDate: dueDate.toISOString(),
+          dueDate: startDate.toISOString(),
         })
       }
 
       setTitle("")
       setTime("")
+      setSchedulingMode("single")
+      setRangeStart(selectedDate.toISOString().slice(0, 10))
+      setRangeEnd(selectedDate.toISOString().slice(0, 10))
+      setSelectedDates([selectedDate.toISOString().slice(0, 10)])
       onTaskCreated()
       onOpenChange(false)
       toast.success("Task added successfully")
@@ -147,6 +206,71 @@ export function AddTaskDialog({
               />
             </div>
           </div>
+          <div className="grid gap-2">
+            <Label>Schedule Type</Label>
+            <Select
+              value={schedulingMode}
+              onValueChange={(value: SchedulingMode) => setSchedulingMode(value)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select schedule type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="single">Single date</SelectItem>
+                <SelectItem value="range">Date range</SelectItem>
+                <SelectItem value="selective">Selective dates</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {schedulingMode === "range" && (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="range-start">Start Date</Label>
+                <Input
+                  id="range-start"
+                  type="date"
+                  value={rangeStart}
+                  onChange={(event) => setRangeStart(event.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="range-end">End Date</Label>
+                <Input
+                  id="range-end"
+                  type="date"
+                  value={rangeEnd}
+                  onChange={(event) => setRangeEnd(event.target.value)}
+                />
+              </div>
+            </div>
+          )}
+          {schedulingMode === "selective" && (
+            <div className="grid gap-3 rounded-lg border p-3">
+              <div className="grid grid-cols-[1fr_auto] gap-2">
+                <Input
+                  type="date"
+                  value={draftDate}
+                  onChange={(event) => setDraftDate(event.target.value)}
+                />
+                <Button type="button" variant="outline" onClick={addDraftDate}>
+                  Add Date
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {selectedDates.map((date) => (
+                  <Button
+                    key={date}
+                    type="button"
+                    variant="secondary"
+                    className="h-8"
+                    onClick={() => setSelectedDates((current) => current.filter((item) => item !== date))}
+                  >
+                    {date}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="grid gap-2">
             <Label htmlFor="category">Category</Label>
             <Select

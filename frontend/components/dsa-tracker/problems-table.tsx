@@ -31,7 +31,7 @@ interface DisplayProblem {
   name: string
   difficulty: "Easy" | "Medium" | "Hard"
   topic: string
-  status: "Solved" | "Attempted"
+  status: "Solved" | "Attempted" | "Revision"
   date: string
 }
 
@@ -44,7 +44,7 @@ interface ProblemsTableProps {
   }
 }
 
-function mapStatus(status: string) {
+function mapStatus(status: string): DisplayProblem["status"] {
   if (status === "solved") return "Solved"
   if (status === "attempted") return "Attempted"
   return "Revision"

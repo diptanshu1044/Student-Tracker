@@ -89,7 +89,8 @@ export async function registerUser(input: RegisterInput) {
       id: user._id,
       name: user.name,
       email: user.email,
-      emailVerified: user.emailVerified
+      emailVerified: user.emailVerified,
+      googleCalendarConnected: user.googleCalendarConnected
     },
     tokens: {
       accessToken,
@@ -118,7 +119,8 @@ export async function loginUser(input: LoginInput) {
       id: user._id,
       name: user.name,
       email: user.email,
-      emailVerified: user.emailVerified
+      emailVerified: user.emailVerified,
+      googleCalendarConnected: user.googleCalendarConnected
     },
     tokens: {
       accessToken,

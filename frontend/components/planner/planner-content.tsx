@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -20,31 +20,100 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { usePlannerMutations, usePlannerProfiles, useGlobalPlanner } from "@/hooks/use-planner"
+import { usePlannerMutations, usePlannerProfiles, useGlobalPlanner, usePlannerTasks } from "@/hooks/use-planner"
+import { getAuthUser, getGooglePlannerConnectUrl } from "@/lib/api"
 import { toast } from "sonner"
 import { WeeklyCalendar } from "./weekly-calendar"
 import { TaskList } from "./task-list"
 import { AddTaskDialog } from "./add-task-dialog"
 
+type PlannerViewMode = "day" | "week" | "month"
+
+const GOOGLE_PENDING_SYNC_KEY = "studentos_planner_pending_google_sync"
+
+function startOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0)
+}
+
+function endOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999)
+}
+
+function startOfWeek(date: Date) {
+  const next = startOfDay(date)
+  const day = next.getDay()
+  const offset = day === 0 ? -6 : 1 - day
+  next.setDate(next.getDate() + offset)
+  return next
+}
+
+function endOfWeek(date: Date) {
+  const next = startOfWeek(date)
+  next.setDate(next.getDate() + 6)
+  return endOfDay(next)
+}
+
+function startOfMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0)
+}
+
+function endOfMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999)
+}
+
+function getRangeForView(date: Date, view: PlannerViewMode) {
+  if (view === "day") {
+    return { startDate: startOfDay(date), endDate: endOfDay(date) }
+  }
+
+  if (view === "month") {
+    return { startDate: startOfMonth(date), endDate: endOfMonth(date) }
+  }
+
+  return { startDate: startOfWeek(date), endDate: endOfWeek(date) }
+}
+
+function toIso(date: Date) {
+  return date.toISOString()
+}
+
 export function PlannerContent() {
   const searchParams = useSearchParams()
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [selectedDate, setSelectedDate] = useState(new Date())
+  const [viewMode, setViewMode] = useState<PlannerViewMode>("week")
   const [refreshToken, setRefreshToken] = useState(0)
   const [selectedProfileId, setSelectedProfileId] = useState<string | undefined>(undefined)
   const [lastImportResult, setLastImportResult] = useState<string | null>(null)
   const [isCreateProfileDialogOpen, setIsCreateProfileDialogOpen] = useState(false)
   const [newProfileName, setNewProfileName] = useState("Study Planner")
   const [isCreatingProfile, setIsCreatingProfile] = useState(false)
+  const [isGoogleConnected, setIsGoogleConnected] = useState(() => Boolean(getAuthUser()?.googleCalendarConnected))
+  const [pendingGoogleSync, setPendingGoogleSync] = useState<string | null>(null)
 
   const { data: profiles } = usePlannerProfiles()
-  const { data: globalPlanner } = useGlobalPlanner({ page: 1, limit: 500 })
+  const currentRange = useMemo(() => getRangeForView(selectedDate, viewMode), [selectedDate, viewMode])
+  const plannerQuery = {
+    page: 1,
+    limit: 500,
+    startDate: toIso(currentRange.startDate),
+    endDate: toIso(currentRange.endDate),
+  }
+  const { data: globalPlanner } = useGlobalPlanner(selectedProfileId ? undefined : plannerQuery)
+  const { data: scopedPlanner } = usePlannerTasks(selectedProfileId, selectedProfileId ? plannerQuery : undefined)
   const plannerMutations = usePlannerMutations()
+  const visiblePlannerItems = selectedProfileId ? scopedPlanner?.items ?? [] : globalPlanner?.items ?? []
 
   useEffect(() => {
     const google = searchParams.get("google")
     if (google === "connected") {
       toast.success("Google Calendar connected")
+      setIsGoogleConnected(true)
+      const pending = window.sessionStorage.getItem(GOOGLE_PENDING_SYNC_KEY)
+      if (pending) {
+        setPendingGoogleSync(pending)
+        window.sessionStorage.removeItem(GOOGLE_PENDING_SYNC_KEY)
+      }
       return
     }
 
@@ -52,6 +121,48 @@ export function PlannerContent() {
       toast.error("Google Calendar connection failed")
     }
   }, [searchParams])
+
+  useEffect(() => {
+    if (!profiles || profiles.length === 0) {
+      return
+    }
+
+    if (!selectedProfileId) {
+      setSelectedProfileId(profiles[0]._id)
+      return
+    }
+
+    const profileExists = profiles.some((profile) => profile._id === selectedProfileId)
+    if (!profileExists) {
+      setSelectedProfileId(profiles[0]._id)
+    }
+  }, [profiles, selectedProfileId])
+
+  useEffect(() => {
+    if (!pendingGoogleSync || !isGoogleConnected) {
+      return
+    }
+
+    const runSync = async () => {
+      try {
+        const payload = pendingGoogleSync ? JSON.parse(pendingGoogleSync) as { profileId?: string } : {}
+        const result = await plannerMutations.syncGoogle.mutateAsync(payload.profileId)
+
+        if (result.syncedCount === 0) {
+          toast.message("No pending tasks were synced")
+        } else {
+          toast.success(`Synced ${result.syncedCount} of ${result.total} tasks to Google Calendar`)
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to sync Google Calendar"
+        toast.error(message)
+      } finally {
+        setPendingGoogleSync(null)
+      }
+    }
+
+    void runSync()
+  }, [pendingGoogleSync, isGoogleConnected, plannerMutations.syncGoogle])
 
   const refreshTasks = () => {
     setRefreshToken((value) => value + 1)
@@ -106,8 +217,21 @@ export function PlannerContent() {
   }
 
   const handleGoogleSync = async () => {
-    if (!selectedProfileId) {
-      toast.error("Select a planner profile first")
+    if (!isGoogleConnected) {
+      const pendingSync = JSON.stringify({ profileId: selectedProfileId })
+      window.sessionStorage.setItem(GOOGLE_PENDING_SYNC_KEY, pendingSync)
+      setPendingGoogleSync(pendingSync)
+
+      try {
+        const { url } = await getGooglePlannerConnectUrl()
+        window.location.assign(url)
+      } catch (error) {
+        window.sessionStorage.removeItem(GOOGLE_PENDING_SYNC_KEY)
+        setPendingGoogleSync(null)
+        const message = error instanceof Error ? error.message : "Failed to start Google connection"
+        toast.error(message)
+      }
+
       return
     }
 
@@ -144,7 +268,17 @@ export function PlannerContent() {
         </Button>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-5">
+        <Select value={viewMode} onValueChange={(value: PlannerViewMode) => setViewMode(value)}>
+          <SelectTrigger>
+            <SelectValue placeholder="View" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="day">Daily</SelectItem>
+            <SelectItem value="week">Weekly</SelectItem>
+            <SelectItem value="month">Monthly</SelectItem>
+          </SelectContent>
+        </Select>
         <Select value={selectedProfileId} onValueChange={setSelectedProfileId}>
           <SelectTrigger>
             <SelectValue placeholder="Select planner profile" />
@@ -169,12 +303,12 @@ export function PlannerContent() {
           variant="outline"
           onClick={() => void handleGoogleSync()}
         >
-          Sync Google Calendar
+          {isGoogleConnected ? "Sync Google Calendar" : "Connect Google & Sync"}
         </Button>
       </div>
 
       <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-        <span>Global tasks: {globalPlanner?.total ?? 0}</span>
+        <span>Visible tasks: {visiblePlannerItems.length}</span>
         {lastImportResult ? <span>{lastImportResult}</span> : null}
       </div>
 
@@ -183,12 +317,16 @@ export function PlannerContent() {
         <WeeklyCalendar
           selectedDate={selectedDate}
           onSelectDate={setSelectedDate}
+          viewMode={viewMode}
+          profileId={selectedProfileId}
+          refreshToken={refreshToken}
           className="lg:col-span-2"
         />
         <TaskList
           selectedDate={selectedDate}
           refreshToken={refreshToken}
           profileId={selectedProfileId}
+          onTaskMutated={refreshTasks}
         />
       </div>
 
