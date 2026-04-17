@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useTheme } from "next-themes"
-import { Moon, Sun, Monitor, Bell, User, Lock, Palette } from "lucide-react"
+import { Moon, Sun, Monitor, Bell, User, Lock, Palette, MailCheck, Link2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -12,11 +12,16 @@ import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
 import {
   clearAuthTokens,
+  disconnectGooglePlanner,
+  getGooglePlannerConnectUrl,
+  getMe,
   getAuthUser,
   hasAccessToken,
   login,
   register,
+  resendVerificationEmail,
   setAuthSession,
+  setAuthUser,
 } from "@/lib/api"
 
 export function SettingsContent() {
@@ -29,6 +34,12 @@ export function SettingsContent() {
   )
   const [authError, setAuthError] = useState<string | null>(null)
   const [authLoading, setAuthLoading] = useState(false)
+  const [verificationLoading, setVerificationLoading] = useState(false)
+  const [verificationMessage, setVerificationMessage] = useState<string | null>(null)
+  const [googleConnected, setGoogleConnected] = useState(Boolean(currentUser?.googleCalendarConnected))
+  const [googleLoading, setGoogleLoading] = useState(false)
+  const [googleMessage, setGoogleMessage] = useState<string | null>(null)
+  const googleStatus = googleConnected ? "Connected" : "Not connected"
   const [notifications, setNotifications] = useState({
     email: true,
     streak: true,
@@ -55,6 +66,11 @@ export function SettingsContent() {
 
       setAuthSession(response)
       setAuthStatus(`Connected as ${response.user.email}`)
+      setVerificationMessage(
+        response.user.emailVerified
+          ? "Email is verified."
+          : "Email is not verified yet. Please verify to unlock planner features."
+      )
     } catch (requestError) {
       setAuthError(requestError instanceof Error ? requestError.message : "Authentication failed")
     } finally {
@@ -65,7 +81,116 @@ export function SettingsContent() {
   const handleDisconnect = () => {
     clearAuthTokens()
     setAuthStatus("Not connected")
+    setVerificationMessage(null)
+    setGoogleConnected(false)
+    setGoogleMessage(null)
   }
+
+  const handleResendVerification = async () => {
+    setVerificationLoading(true)
+    setVerificationMessage(null)
+
+    try {
+      const result = await resendVerificationEmail()
+      if (result.sent) {
+        setVerificationMessage("Verification email sent. Check your inbox.")
+      } else {
+        setVerificationMessage("Email is already verified.")
+      }
+    } catch (requestError) {
+      setVerificationMessage(
+        requestError instanceof Error ? requestError.message : "Failed to send verification email"
+      )
+    } finally {
+      setVerificationLoading(false)
+    }
+  }
+
+  const handleRefreshVerification = async () => {
+    setVerificationLoading(true)
+    setVerificationMessage(null)
+
+    try {
+      const me = await getMe()
+      setAuthUser(me)
+      setVerificationMessage(me.emailVerified ? "Email verified successfully." : "Email still not verified.")
+      setGoogleConnected(Boolean(me.googleCalendarConnected))
+    } catch (requestError) {
+      setVerificationMessage(
+        requestError instanceof Error ? requestError.message : "Failed to refresh verification status"
+      )
+    } finally {
+      setVerificationLoading(false)
+    }
+  }
+
+  const handleGoogleConnect = async () => {
+    setGoogleLoading(true)
+    setGoogleMessage(null)
+
+    try {
+      const { url } = await getGooglePlannerConnectUrl()
+      window.location.assign(url)
+    } catch (requestError) {
+      setGoogleMessage(
+        requestError instanceof Error ? requestError.message : "Failed to start Google connection"
+      )
+      setGoogleLoading(false)
+    }
+  }
+
+  const handleGoogleDisconnect = async () => {
+    setGoogleLoading(true)
+    setGoogleMessage(null)
+
+    try {
+      await disconnectGooglePlanner()
+      setGoogleConnected(false)
+      setGoogleMessage("Google Calendar disconnected")
+
+      const me = await getMe()
+      setAuthUser(me)
+      setGoogleConnected(Boolean(me.googleCalendarConnected))
+    } catch (requestError) {
+      setGoogleMessage(
+        requestError instanceof Error ? requestError.message : "Failed to disconnect Google Calendar"
+      )
+    } finally {
+      setGoogleLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    let active = true
+
+    const loadGoogleStatus = async () => {
+      if (!hasAccessToken()) {
+        if (active) {
+          setGoogleConnected(false)
+        }
+        return
+      }
+
+      try {
+        const me = await getMe()
+        if (!active) {
+          return
+        }
+        setAuthUser(me)
+        setGoogleConnected(Boolean(me.googleCalendarConnected))
+      } catch {
+        if (active) {
+          setGoogleConnected(false)
+        }
+      }
+    }
+
+    void loadGoogleStatus()
+
+    return () => {
+      active = false
+    }
+  }, [])
 
   return (
     <div className="space-y-6">
@@ -189,6 +314,74 @@ export function SettingsContent() {
                 </div>
               </div>
               <Button>Update Password</Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <MailCheck className="size-5 text-muted-foreground" />
+                <CardTitle>Email Verification</CardTitle>
+              </div>
+              <CardDescription>
+                Planner features require a verified email address.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Status: {currentUser?.emailVerified ? "Verified" : "Not verified"}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => void handleResendVerification()}
+                  disabled={verificationLoading || !hasAccessToken() || currentUser?.emailVerified}
+                >
+                  {verificationLoading ? "Please wait..." : "Resend Verification Email"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => void handleRefreshVerification()}
+                  disabled={verificationLoading || !hasAccessToken()}
+                >
+                  Refresh Status
+                </Button>
+              </div>
+              {verificationMessage ? (
+                <p className="text-xs text-muted-foreground">{verificationMessage}</p>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Link2 className="size-5 text-muted-foreground" />
+                <CardTitle>Google Calendar</CardTitle>
+              </div>
+              <CardDescription>
+                Connect Google Calendar for planner sync.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">Status: {googleStatus}</p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => void handleGoogleConnect()}
+                  disabled={googleLoading || !hasAccessToken() || googleConnected}
+                >
+                  {googleLoading ? "Please wait..." : "Connect Google"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => void handleGoogleDisconnect()}
+                  disabled={googleLoading || !hasAccessToken() || !googleConnected}
+                >
+                  Disconnect Google
+                </Button>
+              </div>
+              {googleMessage ? <p className="text-xs text-muted-foreground">{googleMessage}</p> : null}
             </CardContent>
           </Card>
 

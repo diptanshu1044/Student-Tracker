@@ -1,7 +1,15 @@
 import { Router } from "express";
 import { z } from "zod";
+import { authGuard } from "../../shared/middleware/auth";
 import { validate } from "../../shared/middleware/validate";
-import { loginController, refreshController, registerController } from "./auth.controller";
+import {
+  loginController,
+  meController,
+  refreshController,
+  registerController,
+  resendVerificationController,
+  verifyEmailController
+} from "./auth.controller";
 
 const registerSchema = z.object({
   body: z.object({
@@ -24,8 +32,17 @@ const refreshSchema = z.object({
   })
 });
 
+const verifyEmailSchema = z.object({
+  query: z.object({
+    token: z.string().min(10)
+  })
+});
+
 export const authRouter = Router();
 
 authRouter.post("/register", validate(registerSchema), registerController);
 authRouter.post("/login", validate(loginSchema), loginController);
 authRouter.post("/refresh", validate(refreshSchema), refreshController);
+authRouter.get("/verify-email", validate(verifyEmailSchema), verifyEmailController);
+authRouter.post("/resend-verification", authGuard, resendVerificationController);
+authRouter.get("/me", authGuard, meController);

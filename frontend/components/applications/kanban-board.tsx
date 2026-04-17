@@ -18,6 +18,7 @@ import {
   type ApplicationRecord,
   updateApplicationStatus,
 } from "@/lib/api"
+import { toast } from "sonner"
 
 interface Application {
   id: string
@@ -137,8 +138,11 @@ export function KanbanBoard({ refreshToken }: KanbanBoardProps) {
         draggedApp.app.id,
         toColumnId as "applied" | "interview" | "rejected" | "offer"
       )
+      const destinationLabel = EMPTY_COLUMNS.find((column) => column.id === toColumnId)?.title ?? toColumnId
+      toast.success(`Moved to ${destinationLabel}`)
     } catch {
       setColumns(previousColumns)
+      toast.error("Failed to update application status")
     }
 
     setDraggedApp(null)

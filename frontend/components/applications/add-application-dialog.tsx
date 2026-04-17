@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { createApplication } from "@/lib/api"
+import { toast } from "sonner"
 
 interface AddApplicationDialogProps {
   open: boolean
@@ -43,7 +44,9 @@ export function AddApplicationDialog({
 
   const handleSubmit = async () => {
     if (!company.trim() || !role.trim()) {
-      setError("Company and role are required")
+      const message = "Company and role are required"
+      setError(message)
+      toast.error(message)
       return
     }
 
@@ -65,8 +68,11 @@ export function AddApplicationDialog({
       setNotes("")
       onApplicationCreated()
       onOpenChange(false)
+      toast.success("Application added successfully")
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Failed to create application")
+      const message = requestError instanceof Error ? requestError.message : "Failed to create application"
+      setError(message)
+      toast.error(message)
     } finally {
       setSubmitting(false)
     }

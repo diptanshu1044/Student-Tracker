@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { createResume } from "@/lib/api"
+import { toast } from "sonner"
 
 interface CreateResumeDialogProps {
   open: boolean
@@ -39,7 +40,9 @@ export function CreateResumeDialog({
 
   const handleSubmit = async () => {
     if (!name.trim()) {
-      setError("Resume name is required")
+      const message = "Resume name is required"
+      setError(message)
+      toast.error(message)
       return
     }
 
@@ -57,8 +60,11 @@ export function CreateResumeDialog({
       setTargetRole("")
       onResumeCreated()
       onOpenChange(false)
+      toast.success("Resume created successfully")
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Failed to create resume")
+      const message = requestError instanceof Error ? requestError.message : "Failed to create resume"
+      setError(message)
+      toast.error(message)
     } finally {
       setSubmitting(false)
     }

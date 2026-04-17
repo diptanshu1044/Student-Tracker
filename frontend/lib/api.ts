@@ -114,6 +114,46 @@ export interface TaskRecord {
   updatedAt: string
 }
 
+export interface PlannerProfileRecord {
+  _id: string
+  name: string
+  description?: string
+  color: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type PlannerTaskStatus = "pending" | "completed" | "missed"
+
+export interface PlannerTaskRecord {
+  _id: string
+  profileId:
+    | string
+    | {
+        _id: string
+        name: string
+        color: string
+      }
+  title: string
+  description?: string
+  startTime: string
+  endTime: string
+  priority: "low" | "medium" | "high"
+  status: PlannerTaskStatus
+  reminderTime?: string
+  source: "manual" | "csv" | "json" | "excel" | "google"
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PlannerImportResult {
+  successCount: number
+  failedRows: Array<{
+    rowNumber: number
+    error: string
+  }>
+}
+
 export interface ApplicationRecord {
   _id: string
   company: string
@@ -144,6 +184,8 @@ export interface AuthUser {
   id: string
   name: string
   email: string
+  emailVerified?: boolean
+  googleCalendarConnected?: boolean
 }
 
 export interface AuthTokens {
@@ -280,6 +322,12 @@ export function getAuthUser(): AuthUser | null {
   }
 }
 
+export function setAuthUser(user: AuthUser) {
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(user))
+  }
+}
+
 async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { auth = true, skipAuthRefresh = false, headers, ...rest } = options
   let token = getAccessToken()
@@ -295,10 +343,13 @@ async function apiRequest<T>(path: string, options: RequestOptions = {}): Promis
     )
   }
 
+  const hasFormDataBody =
+    typeof FormData !== "undefined" && rest.body instanceof FormData
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...rest,
     headers: {
-      "Content-Type": "application/json",
+      ...(hasFormDataBody ? {} : { "Content-Type": "application/json" }),
       ...(auth && token ? { Authorization: `Bearer ${token}` } : {}),
       ...headers,
     },
@@ -376,6 +427,16 @@ export async function refreshAccessToken(input: { refreshToken: string }) {
     method: "POST",
     auth: false,
     body: JSON.stringify(input),
+  })
+}
+
+export async function getMe() {
+  return apiRequest<AuthUser>("/auth/me")
+}
+
+export async function resendVerificationEmail() {
+  return apiRequest<{ sent: boolean; reason?: "already_verified" }>("/auth/resend-verification", {
+    method: "POST",
   })
 }
 
@@ -482,6 +543,142 @@ export async function updateTaskCompletion(taskId: string, completed: boolean) {
   return apiRequest<TaskRecord>(`/planner/tasks/${taskId}/completed`, {
     method: "PATCH",
     body: JSON.stringify({ completed }),
+  })
+}
+
+export async function getPlannerProfiles() {
+  return apiRequest<PlannerProfileRecord[]>("/planner/profiles")
+}
+
+export async function createPlannerProfile(input: {
+  name: string
+  description?: string
+  color?: string
+}) {
+  return apiRequest<PlannerProfileRecord>("/planner/profiles", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
+
+export async function updatePlannerProfile(
+  profileId: string,
+  input: {
+    name?: string
+    description?: string
+    color?: string
+  }
+) {
+  return apiRequest<PlannerProfileRecord>(`/planner/profiles/${profileId}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  })
+}
+
+export async function deletePlannerProfile(profileId: string) {
+  return apiRequest<{ deleted: true }>(`/planner/profiles/${profileId}`, {
+    method: "DELETE",
+  })
+}
+
+export async function getGlobalPlanner(query?: {
+  page?: number
+  limit?: number
+  priority?: "low" | "medium" | "high"
+  status?: PlannerTaskStatus
+  startDate?: string
+  endDate?: string
+}) {
+  return apiRequest<PaginatedResponse<PlannerTaskRecord>>(withQuery("/planner/all", query))
+}
+
+export async function getPlannerTasksByProfile(
+  profileId: string,
+  query?: {
+    page?: number
+    limit?: number
+    priority?: "low" | "medium" | "high"
+    status?: PlannerTaskStatus
+    startDate?: string
+    endDate?: string
+  }
+) {
+  return apiRequest<PaginatedResponse<PlannerTaskRecord>>(
+    withQuery(`/planner/profile/${profileId}`, query)
+  )
+}
+
+export async function createPlannerTask(input: {
+  profileId: string
+  title: string
+  description?: string
+  startTime: string
+  endTime: string
+  priority: "low" | "medium" | "high"
+  reminderTime?: string
+}) {
+  return apiRequest<PlannerTaskRecord>("/planner/tasks-v2", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
+
+export async function updatePlannerTask(
+  taskId: string,
+  input: Partial<{
+    title: string
+    description: string
+    startTime: string
+    endTime: string
+    priority: "low" | "medium" | "high"
+    status: PlannerTaskStatus
+    reminderTime: string
+  }>
+) {
+  return apiRequest<PlannerTaskRecord>(`/planner/tasks-v2/${taskId}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  })
+}
+
+export async function deletePlannerTask(taskId: string) {
+  return apiRequest<{ deleted: true }>(`/planner/tasks-v2/${taskId}`, {
+    method: "DELETE",
+  })
+}
+
+export async function updatePlannerTaskStatus(taskId: string, status: PlannerTaskStatus) {
+  return apiRequest<PlannerTaskRecord>(`/planner/tasks-v2/${taskId}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  })
+}
+
+export async function importPlannerTasks(profileId: string, file: File) {
+  const form = new FormData()
+  form.append("profileId", profileId)
+  form.append("file", file)
+
+  return apiRequest<PlannerImportResult>("/planner/import", {
+    method: "POST",
+    body: form,
+  })
+}
+
+export async function getGooglePlannerConnectUrl() {
+  return apiRequest<{ url: string }>("/planner/google/connect")
+}
+
+export async function disconnectGooglePlanner() {
+  return apiRequest<{ disconnected: true }>("/planner/google/disconnect", {
+    method: "POST",
+  })
+}
+
+export async function syncPlannerToGoogle(profileId?: string) {
+  return apiRequest<{ total: number; syncedCount: number }>("/planner/google/sync", {
+    method: "POST",
+    body: JSON.stringify({ profileId }),
   })
 }
 

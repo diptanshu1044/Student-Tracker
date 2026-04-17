@@ -13,7 +13,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
-import { getTasks, type TaskRecord, updateTaskCompletion } from "@/lib/api"
+import {
+  getPlannerTasksByProfile,
+  getTasks,
+  type PlannerTaskRecord,
+  type TaskRecord,
+  updatePlannerTaskStatus,
+  updateTaskCompletion,
+} from "@/lib/api"
+import { toast } from "sonner"
 
 interface Task {
   id: string
@@ -26,6 +34,7 @@ interface Task {
 interface TaskListProps {
   selectedDate: Date
   refreshToken: number
+  profileId?: string
 }
 
 function mapTask(record: TaskRecord): Task {
@@ -58,7 +67,27 @@ function isSameDay(left: Date, right: Date) {
   )
 }
 
-export function TaskList({ selectedDate, refreshToken }: TaskListProps) {
+function mapPlannerTask(record: PlannerTaskRecord): Task {
+  const startTime = new Date(record.startTime)
+
+  return {
+    id: record._id,
+    title: record.title,
+    priority:
+      record.priority === "high"
+        ? "High"
+        : record.priority === "medium"
+          ? "Medium"
+          : "Low",
+    dueTime: startTime.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+    }),
+    completed: record.status === "completed",
+  }
+}
+
+export function TaskList({ selectedDate, refreshToken, profileId }: TaskListProps) {
   const [tasks, setTasks] = useState<Task[]>([])
   const [error, setError] = useState<string | null>(null)
 
@@ -67,6 +96,21 @@ export function TaskList({ selectedDate, refreshToken }: TaskListProps) {
 
     const loadTasks = async () => {
       try {
+        if (profileId) {
+          const response = await getPlannerTasksByProfile(profileId, { page: 1, limit: 300 })
+          if (!mounted) {
+            return
+          }
+
+          const nextTasks = response.items
+            .filter((item) => isSameDay(new Date(item.startTime), selectedDate))
+            .map(mapPlannerTask)
+
+          setTasks(nextTasks)
+          setError(null)
+          return
+        }
+
         const response = await getTasks({ page: 1, limit: 300 })
         if (!mounted) {
           return
@@ -96,7 +140,7 @@ export function TaskList({ selectedDate, refreshToken }: TaskListProps) {
     return () => {
       mounted = false
     }
-  }, [refreshToken, selectedDate])
+  }, [profileId, refreshToken, selectedDate])
 
   const toggleTask = async (taskId: string, completed: boolean) => {
     setTasks((current) =>
@@ -106,13 +150,18 @@ export function TaskList({ selectedDate, refreshToken }: TaskListProps) {
     )
 
     try {
-      await updateTaskCompletion(taskId, completed)
+      if (profileId) {
+        await updatePlannerTaskStatus(taskId, completed ? "completed" : "pending")
+      } else {
+        await updateTaskCompletion(taskId, completed)
+      }
     } catch {
       setTasks((current) =>
         current.map((task) =>
           task.id === taskId ? { ...task, completed: !completed } : task
         )
       )
+      toast.error("Failed to update task status")
     }
   }
 

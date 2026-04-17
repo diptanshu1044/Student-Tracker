@@ -19,13 +19,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { createTask } from "@/lib/api"
+import { createPlannerTask, createTask } from "@/lib/api"
+import { toast } from "sonner"
 
 interface AddTaskDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   selectedDate: Date
   onTaskCreated: () => void
+  profileId?: string
 }
 
 export function AddTaskDialog({
@@ -33,6 +35,7 @@ export function AddTaskDialog({
   onOpenChange,
   selectedDate,
   onTaskCreated,
+  profileId,
 }: AddTaskDialogProps) {
   const [title, setTitle] = useState("")
   const [priority, setPriority] = useState<"low" | "medium" | "high">("medium")
@@ -43,7 +46,9 @@ export function AddTaskDialog({
 
   const handleSubmit = async () => {
     if (!title.trim()) {
-      setError("Task title is required")
+      const message = "Task title is required"
+      setError(message)
+      toast.error(message)
       return
     }
 
@@ -58,19 +63,34 @@ export function AddTaskDialog({
         dueDate.setHours(hours, minutes, 0, 0)
       }
 
-      await createTask({
-        title: title.trim(),
-        type,
-        priority,
-        dueDate: dueDate.toISOString(),
-      })
+      if (profileId) {
+        const endTime = new Date(dueDate.getTime() + 60 * 60 * 1000)
+        await createPlannerTask({
+          profileId,
+          title: title.trim(),
+          description: `${type.toUpperCase()} task`,
+          startTime: dueDate.toISOString(),
+          endTime: endTime.toISOString(),
+          priority,
+        })
+      } else {
+        await createTask({
+          title: title.trim(),
+          type,
+          priority,
+          dueDate: dueDate.toISOString(),
+        })
+      }
 
       setTitle("")
       setTime("")
       onTaskCreated()
       onOpenChange(false)
+      toast.success("Task added successfully")
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Failed to create task")
+      const message = requestError instanceof Error ? requestError.message : "Failed to create task"
+      setError(message)
+      toast.error(message)
     } finally {
       setSubmitting(false)
     }
