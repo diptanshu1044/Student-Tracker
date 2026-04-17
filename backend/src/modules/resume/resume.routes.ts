@@ -1,14 +1,34 @@
 import { Router } from "express";
+import multer from "multer";
 import { z } from "zod";
 import { authGuard } from "../../shared/middleware/auth";
 import { validate } from "../../shared/middleware/validate";
-import { createResumeController, listResumesController } from "./resume.controller";
+import {
+  createResumeController,
+  listResumesController,
+  uploadResumeController
+} from "./resume.controller";
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }
+});
 
 const createResumeSchema = z.object({
   body: z.object({
     name: z.string().min(1),
-    content: z.union([z.record(z.unknown()), z.string().min(1)]),
+    content: z.union([z.record(z.unknown()), z.string().min(1)]).optional(),
+    fileUrl: z.string().url().optional(),
     tags: z.array(z.string()).optional()
+  }).refine((body) => Boolean(body.content) || Boolean(body.fileUrl), {
+    message: "Either content or fileUrl is required"
+  })
+});
+
+const uploadResumeSchema = z.object({
+  body: z.object({
+    name: z.string().min(1),
+    tags: z.string().optional()
   })
 });
 
@@ -16,4 +36,5 @@ export const resumeRouter = Router();
 
 resumeRouter.use(authGuard);
 resumeRouter.get("/", listResumesController);
+resumeRouter.post("/upload", upload.single("file"), validate(uploadResumeSchema), uploadResumeController);
 resumeRouter.post("/", validate(createResumeSchema), createResumeController);

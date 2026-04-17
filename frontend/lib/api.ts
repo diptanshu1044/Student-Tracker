@@ -165,10 +165,68 @@ export interface ApplicationRecord {
   updatedAt: string
 }
 
+export type JobStatus = "applied" | "oa" | "interview" | "rejected" | "offer"
+export type JobPriority = "low" | "medium" | "high"
+export type InterviewType = "hr" | "technical" | "system-design"
+
+export interface JobStatusHistoryPoint {
+  status: JobStatus
+  changedAt: string
+}
+
+export interface JobApplicationRecord {
+  _id: string
+  companyName: string
+  role: string
+  status: JobStatus
+  appliedDate: string
+  lastUpdated: string
+  jobLink?: string
+  referral: boolean
+  notes?: string
+  resumeVersion?: string
+  followUpDate?: string
+  priority: JobPriority
+  interviewDate?: string
+  interviewType?: InterviewType
+  tags: string[]
+  statusHistory: JobStatusHistoryPoint[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface JobStats {
+  totalApplications: number
+  interviews: number
+  offers: number
+  rejections: number
+  successRate: number
+  responseRate: number
+}
+
+export interface JobFunnel {
+  applied: number
+  oa: number
+  interview: number
+  offer: number
+  rejected: number
+}
+
+export interface JobInsights {
+  insights: string[]
+  metrics: {
+    referralResponseRate: number
+    nonReferralResponseRate: number
+    rejectedAfterOaCount: number
+    totalRejected: number
+  }
+}
+
 export interface ResumeRecord {
   _id: string
   name: string
-  content: Record<string, unknown> | string
+  content?: Record<string, unknown> | string
+  fileUrl?: string
   tags: string[]
   version: number
   createdAt: string
@@ -719,11 +777,106 @@ export async function getResumes() {
 
 export async function createResume(input: {
   name: string
-  content: Record<string, unknown> | string
+  content?: Record<string, unknown> | string
+  fileUrl?: string
   tags?: string[]
 }) {
   return apiRequest<ResumeRecord>("/resume", {
     method: "POST",
     body: JSON.stringify(input),
   })
+}
+
+export async function uploadResume(input: { name: string; file: File; tags?: string[] }) {
+  const form = new FormData()
+  form.append("name", input.name)
+  form.append("file", input.file)
+  if (input.tags?.length) {
+    form.append("tags", input.tags.join(","))
+  }
+
+  return apiRequest<ResumeRecord>("/resume/upload", {
+    method: "POST",
+    body: form,
+  })
+}
+
+export async function getJobs(query?: {
+  page?: number
+  limit?: number
+  status?: JobStatus
+  company?: string
+  startDate?: string
+  endDate?: string
+  priority?: JobPriority
+  search?: string
+}) {
+  return apiRequest<PaginatedResponse<JobApplicationRecord>>(withQuery("/jobs", query))
+}
+
+export async function addJobApplication(input: {
+  companyName: string
+  role: string
+  status?: JobStatus
+  jobLink?: string
+  referral?: boolean
+  notes?: string
+  resumeVersion?: string
+  followUpDate?: string
+  priority?: JobPriority
+  interviewDate?: string
+  interviewType?: InterviewType
+  tags?: string[]
+}) {
+  return apiRequest<JobApplicationRecord>("/jobs/add", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
+
+export async function updateJobStatus(jobId: string, status: JobStatus) {
+  return apiRequest<JobApplicationRecord>(`/jobs/${jobId}/status`, {
+    method: "PUT",
+    body: JSON.stringify({ status }),
+  })
+}
+
+export async function updateJob(
+  jobId: string,
+  input: Partial<{
+    companyName: string
+    role: string
+    jobLink: string
+    referral: boolean
+    notes: string
+    resumeVersion: string
+    followUpDate: string | null
+    priority: JobPriority
+    interviewDate: string | null
+    interviewType: InterviewType | null
+    tags: string[]
+  }>
+) {
+  return apiRequest<JobApplicationRecord>(`/jobs/${jobId}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  })
+}
+
+export async function deleteJob(jobId: string) {
+  return apiRequest<{ deleted: true }>(`/jobs/${jobId}`, {
+    method: "DELETE",
+  })
+}
+
+export async function getJobStats() {
+  return apiRequest<JobStats>("/jobs/stats")
+}
+
+export async function getJobFunnel() {
+  return apiRequest<JobFunnel>("/jobs/funnel")
+}
+
+export async function getJobInsights() {
+  return apiRequest<JobInsights>("/jobs/insights")
 }

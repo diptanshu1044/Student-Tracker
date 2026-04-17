@@ -2,6 +2,7 @@ import cors from "cors";
 import express from "express";
 import helmet from "helmet";
 import morgan from "morgan";
+import path from "node:path";
 import pinoHttp from "pino-http";
 import { env } from "./config/env";
 import { logger } from "./config/logger";
@@ -23,6 +24,7 @@ app.use(express.json({ limit: "1mb" }));
 app.use(morgan("tiny"));
 app.use(pinoHttp({ logger }));
 app.use(apiRateLimiter);
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 app.get("/health", (_req, res) => {
   res.status(200).json({

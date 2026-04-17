@@ -4,7 +4,8 @@ export interface ResumeDoc {
   _id: Types.ObjectId;
   userId: Types.ObjectId;
   name: string;
-  content: Record<string, unknown> | string;
+  content?: Record<string, unknown> | string;
+  fileUrl?: string;
   tags: string[];
   version: number;
   createdAt: Date;
@@ -15,7 +16,8 @@ const resumeSchema = new Schema<ResumeDoc>(
   {
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     name: { type: String, required: true, trim: true },
-    content: { type: Schema.Types.Mixed, required: true },
+    content: { type: Schema.Types.Mixed },
+    fileUrl: { type: String, trim: true },
     tags: { type: [String], default: [] },
     version: { type: Number, default: 1 }
   },

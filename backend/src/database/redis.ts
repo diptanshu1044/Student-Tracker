@@ -6,8 +6,8 @@ export const redis = new Redis(env.REDIS_URL, {
   lazyConnect: true,
   maxRetriesPerRequest: 1,
   enableOfflineQueue: false,
-  retryStrategy: () => null,
-  reconnectOnError: () => false
+  retryStrategy: (attempt: number) => Math.min(attempt * 200, 5000),
+  reconnectOnError: () => true
 });
 
 let redisReady = false;
@@ -47,9 +47,9 @@ export async function connectRedis(): Promise<void> {
 
   try {
     await redis.connect();
-  } catch {
+  } catch (error) {
     redisReady = false;
-    logger.warn("Redis unavailable at startup, continuing without cache");
+    logger.warn({ err: error }, "Redis unavailable at startup, continuing without cache");
   }
 }
 
