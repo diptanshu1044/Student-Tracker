@@ -16,6 +16,7 @@ export interface JobStatusHistoryItem {
 export interface JobApplicationDoc {
   _id: Types.ObjectId;
   userId: Types.ObjectId;
+  resumeId?: Types.ObjectId;
   companyName: string;
   role: string;
   status: JobStatus;
@@ -48,6 +49,7 @@ const statusHistorySchema = new Schema<JobStatusHistoryItem>(
 const jobApplicationSchema = new Schema<JobApplicationDoc>(
   {
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    resumeId: { type: Schema.Types.ObjectId, ref: "Resume" },
     companyName: { type: String, required: true, trim: true },
     role: { type: String, required: true, trim: true },
     status: { type: String, enum: JOB_STATUSES, default: "applied" },
@@ -70,6 +72,7 @@ const jobApplicationSchema = new Schema<JobApplicationDoc>(
 );
 
 jobApplicationSchema.index({ userId: 1, status: 1, createdAt: -1 });
+jobApplicationSchema.index({ userId: 1, resumeId: 1, status: 1 });
 jobApplicationSchema.index({ userId: 1, companyName: 1, role: 1 });
 jobApplicationSchema.index({ userId: 1, followUpDate: 1, followUpNotified: 1 });
 jobApplicationSchema.index({ userId: 1, interviewDate: 1, interviewNotified: 1 });

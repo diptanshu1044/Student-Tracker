@@ -6,19 +6,20 @@ interface ListApplicationsInput {
   userId: string;
   page?: number;
   limit?: number;
-  status?: "applied" | "interview" | "rejected" | "offer";
+  status?: "to_apply" | "applied" | "interview" | "rejected" | "offer";
 }
 
 interface CreateApplicationInput {
   userId: string;
   company: string;
   role: string;
-  status?: "applied" | "interview" | "rejected" | "offer";
+  status?: "to_apply" | "applied" | "interview" | "rejected" | "offer";
   appliedDate?: string;
+  lastDateToApply?: string;
   notes?: string[];
 }
 
-type ApplicationStatus = "applied" | "interview" | "rejected" | "offer";
+type ApplicationStatus = "to_apply" | "applied" | "interview" | "rejected" | "offer";
 
 export async function listApplications(input: ListApplicationsInput) {
   const paging = getPagination(input);
@@ -41,12 +42,16 @@ export async function listApplications(input: ListApplicationsInput) {
 }
 
 export async function createApplication(input: CreateApplicationInput) {
+  const lastDateToApply = input.lastDateToApply ? new Date(input.lastDateToApply) : undefined;
+
   return ApplicationModel.create({
     userId: input.userId,
     company: input.company,
     role: input.role,
     status: input.status,
     appliedDate: input.appliedDate ? new Date(input.appliedDate) : undefined,
+    lastDateToApply,
+    lastDateToApplyNotified: false,
     notes: input.notes ?? []
   });
 }

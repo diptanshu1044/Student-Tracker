@@ -21,6 +21,7 @@ const interviewTypeSchema = z.enum(["hr", "technical", "system-design"]);
 
 const createJobSchema = z.object({
   body: z.object({
+    resumeId: objectIdSchema.optional(),
     companyName: z.string().min(1).max(200),
     role: z.string().min(1).max(200),
     status: jobStatusSchema.optional(),
@@ -64,6 +65,7 @@ const updateJobSchema = z.object({
   }),
   body: z
     .object({
+      resumeId: objectIdSchema.nullable().optional(),
       companyName: z.string().min(1).max(200).optional(),
       role: z.string().min(1).max(200).optional(),
       jobLink: z.string().url().optional(),

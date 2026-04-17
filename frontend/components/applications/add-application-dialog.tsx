@@ -36,8 +36,9 @@ export function AddApplicationDialog({
 }: AddApplicationDialogProps) {
   const [company, setCompany] = useState("")
   const [role, setRole] = useState("")
-  const [status, setStatus] = useState<"applied" | "interview" | "rejected" | "offer">("applied")
+  const [status, setStatus] = useState<"to_apply" | "applied" | "interview" | "rejected" | "offer">("to_apply")
   const [date, setDate] = useState("")
+  const [lastDateToApply, setLastDateToApply] = useState("")
   const [notes, setNotes] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -58,13 +59,18 @@ export function AddApplicationDialog({
         company: company.trim(),
         role: role.trim(),
         status,
-        appliedDate: date ? new Date(date).toISOString() : undefined,
+        appliedDate: status === "to_apply" ? undefined : date ? new Date(date).toISOString() : undefined,
+        lastDateToApply:
+          status === "to_apply" && lastDateToApply
+            ? new Date(lastDateToApply).toISOString()
+            : undefined,
         notes: notes.trim() ? [notes.trim()] : undefined,
       })
 
       setCompany("")
       setRole("")
       setDate("")
+      setLastDateToApply("")
       setNotes("")
       onApplicationCreated()
       onOpenChange(false)
@@ -111,7 +117,7 @@ export function AddApplicationDialog({
               <Label htmlFor="status">Status</Label>
               <Select
                 value={status}
-                onValueChange={(value: "applied" | "interview" | "rejected" | "offer") =>
+                onValueChange={(value: "to_apply" | "applied" | "interview" | "rejected" | "offer") =>
                   setStatus(value)
                 }
               >
@@ -119,6 +125,7 @@ export function AddApplicationDialog({
                   <SelectValue placeholder="Select" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="to_apply">Yet To Apply</SelectItem>
                   <SelectItem value="applied">Applied</SelectItem>
                   <SelectItem value="interview">Interview</SelectItem>
                   <SelectItem value="offer">Offer</SelectItem>
@@ -127,7 +134,7 @@ export function AddApplicationDialog({
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="date">Application Date</Label>
+              <Label htmlFor="date">{status === "to_apply" ? "Added On" : "Application Date"}</Label>
               <Input
                 id="date"
                 type="date"
@@ -136,6 +143,17 @@ export function AddApplicationDialog({
               />
             </div>
           </div>
+          {status === "to_apply" && (
+            <div className="grid gap-2">
+              <Label htmlFor="lastDateToApply">Last Date To Apply</Label>
+              <Input
+                id="lastDateToApply"
+                type="date"
+                value={lastDateToApply}
+                onChange={(event) => setLastDateToApply(event.target.value)}
+              />
+            </div>
+          )}
           <div className="grid gap-2">
             <Label htmlFor="link">Job Posting Link (optional)</Label>
             <Input id="link" placeholder="https://..." />

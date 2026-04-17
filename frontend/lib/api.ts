@@ -158,8 +158,9 @@ export interface ApplicationRecord {
   _id: string
   company: string
   role: string
-  status: "applied" | "interview" | "rejected" | "offer"
+  status: "to_apply" | "applied" | "interview" | "rejected" | "offer"
   appliedDate?: string
+  lastDateToApply?: string
   notes: string[]
   createdAt: string
   updatedAt: string
@@ -176,6 +177,7 @@ export interface JobStatusHistoryPoint {
 
 export interface JobApplicationRecord {
   _id: string
+  resumeId?: string
   companyName: string
   role: string
   status: JobStatus
@@ -227,10 +229,31 @@ export interface ResumeRecord {
   name: string
   content?: Record<string, unknown> | string
   fileUrl?: string
+  fileType?: "pdf" | "docx"
   tags: string[]
   version: number
+  isDefault: boolean
+  description?: string
   createdAt: string
   updatedAt: string
+}
+
+export interface ResumeStatRecord {
+  resumeId: string
+  name: string
+  totalUsed: number
+  interviews: number
+  offers: number
+  successRate: number
+}
+
+export interface ResumeCompareRecord {
+  resumeId: string
+  name: string
+  totalUsed: number
+  responseRate: number
+  interviewRate: number
+  offerRate: number
 }
 
 interface RequestOptions extends RequestInit {
@@ -743,7 +766,7 @@ export async function syncPlannerToGoogle(profileId?: string) {
 export async function getApplications(query?: {
   page?: number
   limit?: number
-  status?: "applied" | "interview" | "rejected" | "offer"
+  status?: "to_apply" | "applied" | "interview" | "rejected" | "offer"
 }) {
   return apiRequest<PaginatedResponse<ApplicationRecord>>(withQuery("/applications", query))
 }
@@ -751,8 +774,9 @@ export async function getApplications(query?: {
 export async function createApplication(input: {
   company: string
   role: string
-  status?: "applied" | "interview" | "rejected" | "offer"
+  status?: "to_apply" | "applied" | "interview" | "rejected" | "offer"
   appliedDate?: string
+  lastDateToApply?: string
   notes?: string[]
 }) {
   return apiRequest<ApplicationRecord>("/applications", {
@@ -763,7 +787,7 @@ export async function createApplication(input: {
 
 export async function updateApplicationStatus(
   applicationId: string,
-  status: "applied" | "interview" | "rejected" | "offer"
+  status: "to_apply" | "applied" | "interview" | "rejected" | "offer"
 ) {
   return apiRequest<ApplicationRecord>(`/applications/${applicationId}/status`, {
     method: "PATCH",
@@ -771,8 +795,13 @@ export async function updateApplicationStatus(
   })
 }
 
-export async function getResumes() {
-  return apiRequest<ResumeRecord[]>("/resume")
+export async function getResumes(query?: { tags?: string[]; sort?: "latest" | "most_used" }) {
+  return apiRequest<ResumeRecord[]>(
+    withQuery("/resume", {
+      tags: query?.tags?.length ? query.tags.join(",") : undefined,
+      sort: query?.sort,
+    })
+  )
 }
 
 export async function createResume(input: {
@@ -801,6 +830,26 @@ export async function uploadResume(input: { name: string; file: File; tags?: str
   })
 }
 
+export async function setDefaultResume(resumeId: string) {
+  return apiRequest<ResumeRecord>(`/resume/${resumeId}/default`, {
+    method: "PUT",
+  })
+}
+
+export async function deleteResume(resumeId: string) {
+  return apiRequest<{ deleted: true }>(`/resume/${resumeId}`, {
+    method: "DELETE",
+  })
+}
+
+export async function getResumeStats() {
+  return apiRequest<ResumeStatRecord[]>("/resume/stats")
+}
+
+export async function compareResumes() {
+  return apiRequest<ResumeCompareRecord[]>("/resume/compare")
+}
+
 export async function getJobs(query?: {
   page?: number
   limit?: number
@@ -815,6 +864,7 @@ export async function getJobs(query?: {
 }
 
 export async function addJobApplication(input: {
+  resumeId?: string
   companyName: string
   role: string
   status?: JobStatus
@@ -844,6 +894,7 @@ export async function updateJobStatus(jobId: string, status: JobStatus) {
 export async function updateJob(
   jobId: string,
   input: Partial<{
+    resumeId: string | null
     companyName: string
     role: string
     jobLink: string

@@ -1,5 +1,7 @@
 import { Types } from "mongoose";
+import { env } from "../config/env";
 import { JobApplicationModel } from "../models/job-application.model";
+import { ApplicationModel } from "../models/application.model";
 import { UserModel } from "../models/user.model";
 import { sendMail } from "../shared/utils/mailer";
 import { logger } from "../config/logger";
@@ -18,21 +20,53 @@ export async function sendDueJobReminders(now = new Date()) {
     status: { $nin: ["offer", "rejected"] }
   }).lean();
 
-  const dueApplications = [...followUpDue, ...interviewDue];
+  const applicationDeadlineWindowEnd = new Date(
+    now.getTime() + env.APPLICATION_DEADLINE_REMINDER_WINDOW_HOURS * 60 * 60 * 1000
+  );
 
-  if (dueApplications.length === 0) {
-    return { scanned: 0, followUpNotified: 0, interviewNotified: 0 };
+  const applicationDeadlinesDue = await ApplicationModel.find({
+    status: "to_apply",
+    lastDateToApply: { $gte: now, $lte: applicationDeadlineWindowEnd },
+    lastDateToApplyNotified: { $ne: true }
+  }).lean();
+
+  const dueApplications = [...followUpDue, ...interviewDue];
+  const totalScanned = dueApplications.length + applicationDeadlinesDue.length;
+
+  if (totalScanned === 0) {
+    return {
+      scanned: 0,
+      followUpNotified: 0,
+      interviewNotified: 0,
+      applicationDeadlineNotified: 0,
+      mockMode: env.EMAIL_VERIFICATION_MOCK
+    };
   }
 
-  const uniqueUserIds = Array.from(new Set(dueApplications.map((app) => app.userId.toString()))).map(
-    (userId) => new Types.ObjectId(userId)
-  );
+  if (env.EMAIL_VERIFICATION_MOCK) {
+    logger.info({ totalScanned }, "Skipping reminder emails because EMAIL_VERIFICATION_MOCK is enabled");
+    return {
+      scanned: totalScanned,
+      followUpNotified: 0,
+      interviewNotified: 0,
+      applicationDeadlineNotified: 0,
+      mockMode: true
+    };
+  }
+
+  const uniqueUserIds = Array.from(
+    new Set([
+      ...dueApplications.map((app) => app.userId.toString()),
+      ...applicationDeadlinesDue.map((app) => app.userId.toString())
+    ])
+  ).map((userId) => new Types.ObjectId(userId));
 
   const users = await UserModel.find({ _id: { $in: uniqueUserIds } }).select("email name").lean();
   const userById = new Map(users.map((user) => [user._id.toString(), user]));
 
   let followUpNotifiedCount = 0;
   let interviewNotifiedCount = 0;
+  let applicationDeadlineNotifiedCount = 0;
 
   for (const application of followUpDue) {
     const user = userById.get(application.userId.toString());
@@ -82,9 +116,38 @@ export async function sendDueJobReminders(now = new Date()) {
     }
   }
 
+  for (const application of applicationDeadlinesDue) {
+    const user = userById.get(application.userId.toString());
+    if (!user) {
+      continue;
+    }
+
+    try {
+      await sendMail({
+        to: user.email,
+        subject: `Application deadline reminder: ${application.company} - ${application.role}`,
+        text: `Hi ${user.name},\n\nThe application deadline for ${application.company} (${application.role}) is approaching.\nLast date to apply: ${application.lastDateToApply?.toISOString()}\n\nPlease apply before it closes.\n\n- StudentOS`
+      });
+
+      await ApplicationModel.updateOne(
+        { _id: application._id },
+        { $set: { lastDateToApplyNotified: true, updatedAt: new Date() } }
+      );
+
+      applicationDeadlineNotifiedCount += 1;
+    } catch (error) {
+      logger.error(
+        { error, applicationId: application._id.toString() },
+        "Application deadline reminder failed"
+      );
+    }
+  }
+
   return {
-    scanned: dueApplications.length,
+    scanned: totalScanned,
     followUpNotified: followUpNotifiedCount,
-    interviewNotified: interviewNotifiedCount
+    interviewNotified: interviewNotifiedCount,
+    applicationDeadlineNotified: applicationDeadlineNotifiedCount,
+    mockMode: false
   };
 }

@@ -3,10 +3,29 @@ import { StatusCodes } from "http-status-codes";
 import { AppError } from "../../shared/utils/app-error";
 import { asyncHandler } from "../../shared/utils/async-handler";
 import { ok } from "../../shared/utils/api-response";
-import { createResume, createUploadedResume, listResumes } from "./resume.service";
+import {
+  compareResumes,
+  createResume,
+  createUploadedResume,
+  deleteResume,
+  getResumeStats,
+  listResumes,
+  setDefaultResume
+} from "./services/resume.service";
 
 export const listResumesController = asyncHandler(async (req: Request, res: Response) => {
-  const data = await listResumes(req.user!.id);
+  const tagsParam = typeof req.query.tags === "string" ? req.query.tags : undefined;
+  const sortParam = typeof req.query.sort === "string" ? req.query.sort : undefined;
+
+  const data = await listResumes({
+    userId: req.user!.id,
+    tags: tagsParam
+      ?.split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean),
+    sort: sortParam as "latest" | "most_used" | undefined
+  });
+
   res.status(StatusCodes.OK).json(ok(data));
 });
 
@@ -32,8 +51,30 @@ export const uploadResumeController = asyncHandler(async (req: Request, res: Res
     userId: req.user!.id,
     file: req.file,
     name: req.body.name,
-    tags: parsedTags
+    tags: parsedTags,
+    description: req.body.description,
+    isDefault: req.body.isDefault === "true"
   });
 
   res.status(StatusCodes.CREATED).json(ok(data));
+});
+
+export const setDefaultResumeController = asyncHandler(async (req: Request, res: Response) => {
+  const data = await setDefaultResume(req.user!.id, req.params.id);
+  res.status(StatusCodes.OK).json(ok(data));
+});
+
+export const deleteResumeController = asyncHandler(async (req: Request, res: Response) => {
+  const data = await deleteResume(req.user!.id, req.params.id);
+  res.status(StatusCodes.OK).json(ok(data));
+});
+
+export const getResumeStatsController = asyncHandler(async (req: Request, res: Response) => {
+  const data = await getResumeStats(req.user!.id);
+  res.status(StatusCodes.OK).json(ok(data));
+});
+
+export const compareResumesController = asyncHandler(async (req: Request, res: Response) => {
+  const data = await compareResumes(req.user!.id);
+  res.status(StatusCodes.OK).json(ok(data));
 });

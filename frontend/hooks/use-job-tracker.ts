@@ -3,12 +3,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   addJobApplication,
+  compareResumes,
+  deleteResume,
   deleteJob,
   getJobFunnel,
   getJobInsights,
   getJobs,
   getJobStats,
+  getResumeStats,
   getResumes,
+  setDefaultResume,
   updateJob,
   updateJobStatus,
   uploadResume,
@@ -61,6 +65,20 @@ export function useResumeLibrary() {
   })
 }
 
+export function useResumeStats() {
+  return useQuery({
+    queryKey: ["resumeStats"],
+    queryFn: getResumeStats,
+  })
+}
+
+export function useResumeComparison() {
+  return useQuery({
+    queryKey: ["resumeCompare"],
+    queryFn: compareResumes,
+  })
+}
+
 export function useJobMutations() {
   const queryClient = useQueryClient()
 
@@ -70,6 +88,8 @@ export function useJobMutations() {
       queryClient.invalidateQueries({ queryKey: ["jobStats"] }),
       queryClient.invalidateQueries({ queryKey: ["jobFunnel"] }),
       queryClient.invalidateQueries({ queryKey: ["jobInsights"] }),
+      queryClient.invalidateQueries({ queryKey: ["resumeStats"] }),
+      queryClient.invalidateQueries({ queryKey: ["resumeCompare"] }),
     ])
   }
 
@@ -92,6 +112,7 @@ export function useJobMutations() {
       input: Partial<{
         companyName: string
         role: string
+        resumeId: string | null
         jobLink: string
         referral: boolean
         notes: string
@@ -114,7 +135,30 @@ export function useJobMutations() {
   const uploadResumeFile = useMutation({
     mutationFn: uploadResume,
     onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["resumes"] }),
+        queryClient.invalidateQueries({ queryKey: ["resumeStats"] }),
+        queryClient.invalidateQueries({ queryKey: ["resumeCompare"] }),
+      ])
+    },
+  })
+
+  const markResumeDefault = useMutation({
+    mutationFn: setDefaultResume,
+    onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["resumes"] })
+    },
+  })
+
+  const removeResume = useMutation({
+    mutationFn: deleteResume,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["resumes"] }),
+        queryClient.invalidateQueries({ queryKey: ["resumeStats"] }),
+        queryClient.invalidateQueries({ queryKey: ["resumeCompare"] }),
+        queryClient.invalidateQueries({ queryKey: ["jobs"] }),
+      ])
     },
   })
 
@@ -124,5 +168,7 @@ export function useJobMutations() {
     patchJob,
     removeJob,
     uploadResumeFile,
+    markResumeDefault,
+    removeResume,
   }
 }

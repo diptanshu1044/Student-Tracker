@@ -12,8 +12,9 @@ const createApplicationSchema = z.object({
   body: z.object({
     company: z.string().min(1),
     role: z.string().min(1),
-    status: z.enum(["applied", "interview", "rejected", "offer"]).optional(),
+    status: z.enum(["to_apply", "applied", "interview", "rejected", "offer"]).optional(),
     appliedDate: z.string().datetime().optional(),
+    lastDateToApply: z.string().datetime().optional(),
     notes: z.array(z.string()).optional()
   })
 });
@@ -23,7 +24,7 @@ const updateApplicationStatusSchema = z.object({
     applicationId: z.string().min(12)
   }),
   body: z.object({
-    status: z.enum(["applied", "interview", "rejected", "offer"])
+    status: z.enum(["to_apply", "applied", "interview", "rejected", "offer"])
   })
 });
 

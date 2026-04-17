@@ -8,14 +8,14 @@ function getTransporter() {
     return transporter;
   }
 
-  if (env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS) {
+  if (env.BREVO_SMTP_USER && env.BREVO_SMTP_PASS) {
     transporter = nodemailer.createTransport({
-      host: env.SMTP_HOST,
-      port: env.SMTP_PORT,
-      secure: env.SMTP_PORT === 465,
+      host: env.BREVO_SMTP_HOST,
+      port: env.BREVO_SMTP_PORT,
+      secure: env.BREVO_SMTP_PORT === 465,
       auth: {
-        user: env.SMTP_USER,
-        pass: env.SMTP_PASS
+        user: env.BREVO_SMTP_USER,
+        pass: env.BREVO_SMTP_PASS
       }
     });
     return transporter;
@@ -34,7 +34,7 @@ export async function sendMail(input: {
   const currentTransporter = getTransporter();
 
   await currentTransporter.sendMail({
-    from: env.SMTP_FROM,
+    from: env.BREVO_FROM,
     to: input.to,
     subject: input.subject,
     text: input.text,

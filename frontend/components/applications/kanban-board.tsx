@@ -24,7 +24,8 @@ interface Application {
   id: string
   company: string
   role: string
-  date: string
+  appliedDateLabel: string
+  lastDateToApplyLabel?: string
   notes?: string
   logo?: string
 }
@@ -37,6 +38,7 @@ interface Column {
 }
 
 const EMPTY_COLUMNS: Column[] = [
+  { id: "to_apply", title: "Yet To Apply", color: "bg-chart-1", applications: [] },
   { id: "applied", title: "Applied", color: "bg-primary", applications: [] },
   { id: "interview", title: "Interview", color: "bg-chart-4", applications: [] },
   { id: "offer", title: "Offer", color: "bg-chart-3", applications: [] },
@@ -45,23 +47,34 @@ const EMPTY_COLUMNS: Column[] = [
 
 interface KanbanBoardProps {
   refreshToken: number
+  activeStatus: "to_apply" | "applied" | "interview" | "offer" | "rejected"
+  onApplicationUpdated: () => void
 }
 
 function toColumnItem(record: ApplicationRecord): Application {
+  const appliedDate = new Date(record.appliedDate ?? record.createdAt).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  })
+
   return {
     id: record._id,
     company: record.company,
     role: record.role,
-    date: new Date(record.appliedDate ?? record.createdAt).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    }),
+    appliedDateLabel: appliedDate,
+    lastDateToApplyLabel: record.lastDateToApply
+      ? new Date(record.lastDateToApply).toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        })
+      : undefined,
     notes: record.notes[0],
   }
 }
 
-export function KanbanBoard({ refreshToken }: KanbanBoardProps) {
+export function KanbanBoard({ refreshToken, activeStatus, onApplicationUpdated }: KanbanBoardProps) {
   const [columns, setColumns] = useState<Column[]>(EMPTY_COLUMNS)
   const [draggedApp, setDraggedApp] = useState<{ app: Application; fromColumnId: string } | null>(null)
 
@@ -136,10 +149,11 @@ export function KanbanBoard({ refreshToken }: KanbanBoardProps) {
     try {
       await updateApplicationStatus(
         draggedApp.app.id,
-        toColumnId as "applied" | "interview" | "rejected" | "offer"
+        toColumnId as "to_apply" | "applied" | "interview" | "rejected" | "offer"
       )
       const destinationLabel = EMPTY_COLUMNS.find((column) => column.id === toColumnId)?.title ?? toColumnId
       toast.success(`Moved to ${destinationLabel}`)
+      onApplicationUpdated()
     } catch {
       setColumns(previousColumns)
       toast.error("Failed to update application status")
@@ -148,7 +162,61 @@ export function KanbanBoard({ refreshToken }: KanbanBoardProps) {
     setDraggedApp(null)
   }
 
-  const visibleColumns = useMemo(() => columns, [columns])
+  const visibleColumns = useMemo(
+    () => columns.filter((column) => column.id === activeStatus),
+    [columns, activeStatus]
+  )
+
+  const statusOptions = EMPTY_COLUMNS.map((column) => ({ id: column.id, title: column.title }))
+
+  const moveApplication = async (
+    applicationId: string,
+    fromColumnId: string,
+    nextStatus: "to_apply" | "applied" | "interview" | "offer" | "rejected"
+  ) => {
+    if (fromColumnId === nextStatus) {
+      return
+    }
+
+    const app = columns
+      .find((column) => column.id === fromColumnId)
+      ?.applications.find((item) => item.id === applicationId)
+
+    if (!app) {
+      return
+    }
+
+    const previousColumns = columns
+
+    setColumns((prevColumns) => {
+      return prevColumns.map((col) => {
+        if (col.id === fromColumnId) {
+          return {
+            ...col,
+            applications: col.applications.filter((a) => a.id !== applicationId),
+          }
+        }
+
+        if (col.id === nextStatus) {
+          return {
+            ...col,
+            applications: [...col.applications, app],
+          }
+        }
+
+        return col
+      })
+    })
+
+    try {
+      await updateApplicationStatus(applicationId, nextStatus)
+      toast.success(`Moved to ${statusOptions.find((option) => option.id === nextStatus)?.title ?? nextStatus}`)
+      onApplicationUpdated()
+    } catch {
+      setColumns(previousColumns)
+      toast.error("Failed to update application status")
+    }
+  }
 
   return (
     <ScrollArea className="w-full whitespace-nowrap rounded-lg">
@@ -195,8 +263,16 @@ export function KanbanBoard({ refreshToken }: KanbanBoardProps) {
                             </p>
                             <div className="flex items-center gap-1 text-xs text-muted-foreground">
                               <Calendar className="size-3" />
-                              {app.date}
+                              {column.id === "to_apply"
+                                ? `Added ${app.appliedDateLabel}`
+                                : `Applied ${app.appliedDateLabel}`}
                             </div>
+                            {column.id === "to_apply" && app.lastDateToApplyLabel && (
+                              <div className="flex items-center gap-1 text-xs text-chart-5">
+                                <Calendar className="size-3" />
+                                Last Date To Apply: {app.lastDateToApplyLabel}
+                              </div>
+                            )}
                             {app.notes && (
                               <p className="text-xs text-muted-foreground italic mt-2 whitespace-normal">
                                 {app.notes}
@@ -211,11 +287,22 @@ export function KanbanBoard({ refreshToken }: KanbanBoardProps) {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem>Edit</DropdownMenuItem>
-                            <DropdownMenuItem>Add Notes</DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive">
-                              Delete
-                            </DropdownMenuItem>
+                            {statusOptions
+                              .filter((option) => option.id !== column.id)
+                              .map((option) => (
+                                <DropdownMenuItem
+                                  key={option.id}
+                                  onClick={() =>
+                                    void moveApplication(
+                                      app.id,
+                                      column.id,
+                                      option.id as "to_apply" | "applied" | "interview" | "offer" | "rejected"
+                                    )
+                                  }
+                                >
+                                  Move to {option.title}
+                                </DropdownMenuItem>
+                              ))}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>

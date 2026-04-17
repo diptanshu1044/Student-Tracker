@@ -13,7 +13,7 @@ export const listApplicationsController = asyncHandler(async (req: Request, res:
     userId: req.user!.id,
     page: req.query.page ? Number(req.query.page) : undefined,
     limit: req.query.limit ? Number(req.query.limit) : undefined,
-    status: req.query.status as "applied" | "interview" | "rejected" | "offer" | undefined
+    status: req.query.status as "to_apply" | "applied" | "interview" | "rejected" | "offer" | undefined
   });
 
   res.status(StatusCodes.OK).json(ok(data));

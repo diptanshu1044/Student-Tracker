@@ -11,6 +11,12 @@ import {
 } from "../../../models/job-application.model";
 import { AppError } from "../../../shared/utils/app-error";
 import { getPagination } from "../../../shared/utils/pagination";
+import {
+  syncResumeUsageOutcomeForJob,
+  trackResumeUsageForJob
+} from "../../resume/services/analytics.service";
+import { validateResumeOwnership } from "../../resume/services/resume.service";
+import { ResumeUsageModel } from "../../../models/resume-usage.model";
 
 export interface ListJobsInput {
   userId: string;
@@ -26,6 +32,7 @@ export interface ListJobsInput {
 
 export interface CreateJobInput {
   userId: string;
+  resumeId?: string;
   companyName: string;
   role: string;
   status?: JobStatus;
@@ -41,6 +48,7 @@ export interface CreateJobInput {
 }
 
 export interface UpdateJobInput {
+  resumeId?: string | null;
   companyName?: string;
   role?: string;
   jobLink?: string;
@@ -104,8 +112,13 @@ export async function addJobApplication(input: CreateJobInput) {
     );
   }
 
-  return JobApplicationModel.create({
+  if (input.resumeId) {
+    await validateResumeOwnership(input.userId, input.resumeId);
+  }
+
+  const created = await JobApplicationModel.create({
     userId,
+    resumeId: input.resumeId ? toObjectId(input.resumeId) : undefined,
     companyName: normalizedCompany,
     role: normalizedRole,
     status,
@@ -122,6 +135,18 @@ export async function addJobApplication(input: CreateJobInput) {
     tags: input.tags ?? [],
     statusHistory: [{ status, changedAt: now }]
   });
+
+  if (input.resumeId) {
+    await trackResumeUsageForJob({
+      userId: input.userId,
+      jobId: created._id.toString(),
+      resumeId: input.resumeId,
+      outcome: status,
+      usedAt: now
+    });
+  }
+
+  return created;
 }
 
 export async function listJobApplications(input: ListJobsInput) {
@@ -193,10 +218,26 @@ export async function updateJobApplicationStatus(userId: string, jobId: string, 
   document.statusHistory.push({ status: nextStatus, changedAt: now });
   await document.save();
 
+  await syncResumeUsageOutcomeForJob({
+    userId,
+    jobId,
+    outcome: nextStatus
+  });
+
   return document;
 }
 
 export async function updateJobApplication(userId: string, jobId: string, input: UpdateJobInput) {
+  const existing = await JobApplicationModel.findOne({ _id: toObjectId(jobId), userId: toObjectId(userId) });
+
+  if (!existing) {
+    throw new AppError("Application not found", StatusCodes.NOT_FOUND);
+  }
+
+  if (typeof input.resumeId === "string") {
+    await validateResumeOwnership(userId, input.resumeId);
+  }
+
   const patch: Record<string, unknown> = {
     ...("companyName" in input ? { companyName: input.companyName?.trim() } : {}),
     ...("role" in input ? { role: input.role?.trim() } : {}),
@@ -224,14 +265,41 @@ export async function updateJobApplication(userId: string, jobId: string, input:
 
   patch.lastUpdated = new Date();
 
+  const unsetPatch: Record<string, unknown> = {};
+
+  if ("resumeId" in input) {
+    if (typeof input.resumeId === "string") {
+      patch.resumeId = toObjectId(input.resumeId);
+    } else if (input.resumeId === null) {
+      unsetPatch.resumeId = "";
+    }
+  }
+
   const updated = await JobApplicationModel.findOneAndUpdate(
     { _id: toObjectId(jobId), userId: toObjectId(userId) },
-    { $set: patch },
+    {
+      ...(Object.keys(patch).length > 0 ? { $set: patch } : {}),
+      ...(Object.keys(unsetPatch).length > 0 ? { $unset: unsetPatch } : {})
+    },
     { new: true }
   );
 
   if (!updated) {
     throw new AppError("Application not found", StatusCodes.NOT_FOUND);
+  }
+
+  if (updated.resumeId) {
+    await trackResumeUsageForJob({
+      userId,
+      jobId,
+      resumeId: updated.resumeId.toString(),
+      outcome: updated.status,
+      usedAt: new Date()
+    });
+  }
+
+  if (input.resumeId === null) {
+    await ResumeUsageModel.deleteOne({ userId: toObjectId(userId), jobId: toObjectId(jobId) });
   }
 
   return updated;

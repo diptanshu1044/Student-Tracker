@@ -130,6 +130,8 @@ Applied indexes prioritize read-heavy filters:
   - Set CORS_ORIGIN to your frontend URL (for local dev: http://localhost:3000).
   - For Upstash, set REDIS_URL using the TLS URL from your Upstash dashboard:
     rediss://default:<UPSTASH_REDIS_PASSWORD>@<UPSTASH_REDIS_HOST>:6379
+  - For Brevo email delivery, set BREVO_SMTP_USER and BREVO_SMTP_PASS in .env.
+  - For S3 resume uploads in local development, provide AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY (or use another valid AWS credential source).
 2. Install dependencies:
    npm install
 3. Run development server:

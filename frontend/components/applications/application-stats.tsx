@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Briefcase, FileCheck, MessageSquare, Trophy } from "lucide-react"
+import { Briefcase, Clock3, FileCheck, MessageSquare, Trophy } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { getApplications, type ApplicationRecord } from "@/lib/api"
 
@@ -37,12 +37,17 @@ export function ApplicationStats({ refreshToken }: ApplicationStatsProps) {
 
   const counts = useMemo(() => {
     const byStatus = {
+      toApply: 0,
       applied: 0,
       interview: 0,
       offer: 0,
     }
 
     for (const item of applications) {
+      if (item.status === "to_apply") {
+        byStatus.toApply += 1
+      }
+
       if (item.status === "applied") {
         byStatus.applied += 1
       }
@@ -58,6 +63,7 @@ export function ApplicationStats({ refreshToken }: ApplicationStatsProps) {
 
     return {
       total: applications.length,
+      toApply: byStatus.toApply,
       applied: byStatus.applied,
       interview: byStatus.interview,
       offer: byStatus.offer,
@@ -66,11 +72,18 @@ export function ApplicationStats({ refreshToken }: ApplicationStatsProps) {
 
   const stats = [
     {
-      label: "Total Applied",
+      label: "Total Tracked",
       value: counts.total,
       icon: Briefcase,
       color: "text-primary",
       bgColor: "bg-primary/10",
+    },
+    {
+      label: "Yet To Apply",
+      value: counts.toApply,
+      icon: Clock3,
+      color: "text-chart-1",
+      bgColor: "bg-chart-1/10",
     },
     {
       label: "Applied",
@@ -96,7 +109,7 @@ export function ApplicationStats({ refreshToken }: ApplicationStatsProps) {
   ]
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
       {stats.map((stat) => (
         <Card key={stat.label}>
           <CardContent className="flex items-center gap-4 p-4">
