@@ -1,5 +1,6 @@
 import path from "node:path";
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { StatusCodes } from "http-status-codes";
 import { env } from "../../../config/env";
 import { logger } from "../../../config/logger";
@@ -171,6 +172,46 @@ async function uploadContentToS3(input: UploadResumeContentInput): Promise<Uploa
   return {
     fileUrl: buildS3PublicUrl(key)
   };
+}
+
+function extractS3KeyFromUrl(fileUrl: string) {
+  const normalizedBucket = env.S3_BUCKET;
+
+  if (env.S3_PUBLIC_BASE_URL && fileUrl.startsWith(env.S3_PUBLIC_BASE_URL)) {
+    return fileUrl.slice(env.S3_PUBLIC_BASE_URL.length).replace(/^\//, "");
+  }
+
+  const parsedUrl = new URL(fileUrl);
+  const pathname = parsedUrl.pathname.replace(/^\//, "");
+
+  if (!pathname) {
+    throw new AppError("Invalid resume file URL", StatusCodes.BAD_REQUEST);
+  }
+
+  if (pathname.startsWith(`${normalizedBucket}/`)) {
+    return pathname.slice(normalizedBucket.length + 1);
+  }
+
+  return pathname;
+}
+
+export async function createSignedResumeFileUrl(fileUrl: string) {
+  try {
+    const key = extractS3KeyFromUrl(fileUrl);
+    const client = getS3Client();
+
+    return getSignedUrl(
+      client,
+      new GetObjectCommand({
+        Bucket: env.S3_BUCKET,
+        Key: key
+      }),
+      { expiresIn: 60 * 10 }
+    );
+  } catch (error) {
+    logger.error({ error, fileUrl }, "Failed to create signed resume file URL");
+    throw new AppError("Unable to open resume file right now", StatusCodes.INTERNAL_SERVER_ERROR);
+  }
 }
 
 export async function uploadResumeFile(input: UploadResumeFileInput): Promise<UploadedFileResult> {

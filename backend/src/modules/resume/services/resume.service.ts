@@ -4,7 +4,7 @@ import { JobApplicationModel } from "../../../models/job-application.model";
 import { ResumeModel } from "../../../models/resume.model";
 import { ResumeUsageModel } from "../../../models/resume-usage.model";
 import { AppError } from "../../../shared/utils/app-error";
-import { uploadResumeContent, uploadResumeFile } from "./storage.service";
+import { createSignedResumeFileUrl, uploadResumeContent, uploadResumeFile } from "./storage.service";
 
 type ListSort = "latest" | "most_used";
 
@@ -31,6 +31,13 @@ interface CreateUploadedResumeInput {
   tags?: string[];
   description?: string;
   isDefault?: boolean;
+}
+
+interface UpdateResumeInput {
+  name?: string;
+  content?: Record<string, unknown> | string;
+  tags?: string[];
+  description?: string;
 }
 
 function toObjectId(value: string) {
@@ -237,6 +244,64 @@ export async function setDefaultResume(userId: string, resumeId: string) {
   await ensureOwnedResume(userId, resumeId);
   await ensureSingleDefaultResume(userId, resumeId);
   return ResumeModel.findById(toObjectId(resumeId));
+}
+
+export async function getResumeById(userId: string, resumeId: string) {
+  return ensureOwnedResume(userId, resumeId);
+}
+
+export async function updateResume(userId: string, resumeId: string, input: UpdateResumeInput) {
+  const existing = await ensureOwnedResume(userId, resumeId);
+
+  const updates: Record<string, unknown> = {};
+
+  if (typeof input.name !== "undefined") {
+    const normalizedName = input.name.trim();
+    if (!normalizedName) {
+      throw new AppError("Resume name is required", StatusCodes.BAD_REQUEST);
+    }
+    updates.name = normalizedName;
+  }
+
+  if (typeof input.content !== "undefined") {
+    updates.content = input.content;
+  }
+
+  if (typeof input.tags !== "undefined") {
+    updates.tags = normalizeTags(input.tags);
+  }
+
+  if (typeof input.description !== "undefined") {
+    updates.description = input.description.trim() || undefined;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return existing;
+  }
+
+  await ResumeModel.updateOne(
+    {
+      _id: existing._id,
+      userId: toObjectId(userId)
+    },
+    {
+      $set: updates
+    }
+  );
+
+  return ResumeModel.findById(existing._id);
+}
+
+export async function getResumeFileAccessUrl(userId: string, resumeId: string) {
+  const resume = await ensureOwnedResume(userId, resumeId);
+
+  if (!resume.fileUrl) {
+    throw new AppError("Resume file is not available", StatusCodes.NOT_FOUND);
+  }
+
+  return {
+    url: await createSignedResumeFileUrl(resume.fileUrl)
+  };
 }
 
 export async function deleteResume(userId: string, resumeId: string) {

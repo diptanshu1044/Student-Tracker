@@ -7,9 +7,12 @@ import {
   compareResumesController,
   createResumeController,
   deleteResumeController,
+  getResumeByIdController,
+  getResumeFileAccessUrlController,
   getResumeStatsController,
   listResumesController,
   setDefaultResumeController,
+  updateResumeController,
   uploadResumeController
 } from "./resume.controller";
 
@@ -53,6 +56,22 @@ const idParamSchema = z.object({
   })
 });
 
+const updateResumeSchema = z.object({
+  params: z.object({
+    id: z.string().length(24)
+  }),
+  body: z
+    .object({
+      name: z.string().min(1).optional(),
+      content: z.union([z.record(z.unknown()), z.string()]).optional(),
+      tags: z.array(z.string()).optional(),
+      description: z.string().max(2000).optional()
+    })
+    .refine((body) => Object.keys(body).length > 0, {
+      message: "At least one field is required"
+    })
+});
+
 export const resumeRouter = Router();
 
 resumeRouter.use(authGuard);
@@ -61,5 +80,8 @@ resumeRouter.get("/stats", getResumeStatsController);
 resumeRouter.get("/compare", compareResumesController);
 resumeRouter.post("/upload", upload.single("file"), validate(uploadResumeSchema), uploadResumeController);
 resumeRouter.post("/", validate(createResumeSchema), createResumeController);
+resumeRouter.get("/:id", validate(idParamSchema), getResumeByIdController);
+resumeRouter.get("/:id/file-url", validate(idParamSchema), getResumeFileAccessUrlController);
+resumeRouter.patch("/:id", validate(updateResumeSchema), updateResumeController);
 resumeRouter.put("/:id/default", validate(idParamSchema), setDefaultResumeController);
 resumeRouter.delete("/:id", validate(idParamSchema), deleteResumeController);

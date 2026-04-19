@@ -804,6 +804,14 @@ export async function getResumes(query?: { tags?: string[]; sort?: "latest" | "m
   )
 }
 
+export async function getResumeById(resumeId: string) {
+  return apiRequest<ResumeRecord>(`/resume/${resumeId}`)
+}
+
+export async function getResumeFileUrl(resumeId: string) {
+  return apiRequest<{ url: string }>(`/resume/${resumeId}/file-url`)
+}
+
 export async function createResume(input: {
   name: string
   content?: Record<string, unknown> | string
@@ -839,6 +847,21 @@ export async function setDefaultResume(resumeId: string) {
 export async function deleteResume(resumeId: string) {
   return apiRequest<{ deleted: true }>(`/resume/${resumeId}`, {
     method: "DELETE",
+  })
+}
+
+export async function updateResume(
+  resumeId: string,
+  input: Partial<{
+    name: string
+    content: Record<string, unknown> | string
+    tags: string[]
+    description: string
+  }>
+) {
+  return apiRequest<ResumeRecord>(`/resume/${resumeId}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
   })
 }
 

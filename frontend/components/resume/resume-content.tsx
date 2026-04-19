@@ -33,7 +33,10 @@ export function ResumeContent() {
       </div>
 
       {/* Resume Grid */}
-      <ResumeGrid refreshToken={refreshToken} />
+      <ResumeGrid
+        refreshToken={refreshToken}
+        onCreateResume={() => setIsCreateDialogOpen(true)}
+      />
 
       {/* Create Resume Dialog */}
       <CreateResumeDialog

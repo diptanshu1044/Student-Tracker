@@ -8,9 +8,12 @@ import {
   createResume,
   createUploadedResume,
   deleteResume,
+  getResumeById,
+  getResumeFileAccessUrl,
   getResumeStats,
   listResumes,
-  setDefaultResume
+  setDefaultResume,
+  updateResume
 } from "./services/resume.service";
 
 export const listResumesController = asyncHandler(async (req: Request, res: Response) => {
@@ -32,6 +35,21 @@ export const listResumesController = asyncHandler(async (req: Request, res: Resp
 export const createResumeController = asyncHandler(async (req: Request, res: Response) => {
   const data = await createResume({ userId: req.user!.id, ...req.body });
   res.status(StatusCodes.CREATED).json(ok(data));
+});
+
+export const getResumeByIdController = asyncHandler(async (req: Request, res: Response) => {
+  const data = await getResumeById(req.user!.id, req.params.id);
+  res.status(StatusCodes.OK).json(ok(data));
+});
+
+export const getResumeFileAccessUrlController = asyncHandler(async (req: Request, res: Response) => {
+  const data = await getResumeFileAccessUrl(req.user!.id, req.params.id);
+  res.status(StatusCodes.OK).json(ok(data));
+});
+
+export const updateResumeController = asyncHandler(async (req: Request, res: Response) => {
+  const data = await updateResume(req.user!.id, req.params.id, req.body);
+  res.status(StatusCodes.OK).json(ok(data));
 });
 
 export const uploadResumeController = asyncHandler(async (req: Request, res: Response) => {

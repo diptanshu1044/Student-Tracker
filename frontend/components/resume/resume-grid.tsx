@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import {
   Copy,
   Download,
@@ -25,10 +26,12 @@ import { getResumes, type ResumeRecord } from "@/lib/api"
 
 interface ResumeGridProps {
   refreshToken: number
+  onCreateResume: () => void
 }
 
-export function ResumeGrid({ refreshToken }: ResumeGridProps) {
+export function ResumeGrid({ refreshToken, onCreateResume }: ResumeGridProps) {
   const [resumes, setResumes] = useState<ResumeRecord[]>([])
+  const router = useRouter()
 
   useEffect(() => {
     let mounted = true
@@ -75,9 +78,18 @@ export function ResumeGrid({ refreshToken }: ResumeGridProps) {
         <Card
           key={resume._id}
           className={cn(
-            "group transition-all hover:shadow-md",
+            "group cursor-pointer transition-all hover:shadow-md",
             resume.version === 1 && "ring-2 ring-primary"
           )}
+          role="button"
+          tabIndex={0}
+          onClick={() => router.push(`/resume/${resume._id}`)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault()
+              router.push(`/resume/${resume._id}`)
+            }
+          }}
         >
           <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
             <div className="flex items-center gap-2">
@@ -94,12 +106,13 @@ export function ResumeGrid({ refreshToken }: ResumeGridProps) {
                   variant="ghost"
                   size="icon"
                   className="size-8 opacity-0 transition-opacity group-hover:opacity-100"
+                  onClick={(event) => event.stopPropagation()}
                 >
                   <MoreHorizontal className="size-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem>
+              <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
+                <DropdownMenuItem onClick={() => router.push(`/resume/${resume._id}`)}>
                   <Edit className="mr-2 size-4" />
                   Edit
                 </DropdownMenuItem>
@@ -152,7 +165,18 @@ export function ResumeGrid({ refreshToken }: ResumeGridProps) {
       ))}
 
       {/* Empty state for adding new resume */}
-      <Card className="flex min-h-50 cursor-pointer items-center justify-center border-dashed transition-colors hover:border-primary hover:bg-primary/5">
+      <Card
+        className="flex min-h-50 cursor-pointer items-center justify-center border-dashed transition-colors hover:border-primary hover:bg-primary/5"
+        role="button"
+        tabIndex={0}
+        onClick={onCreateResume}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault()
+            onCreateResume()
+          }
+        }}
+      >
         <CardContent className="flex flex-col items-center gap-2 text-center">
           <div className="flex size-12 items-center justify-center rounded-full bg-muted">
             <FileText className="size-6 text-muted-foreground" />
