@@ -506,6 +506,180 @@ function formatSavedAt(value: Date | null) {
   })}`
 }
 
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"]|'/g, (character) => {
+    switch (character) {
+      case "&":
+        return "&amp;"
+      case "<":
+        return "&lt;"
+      case ">":
+        return "&gt;"
+      case '"':
+        return "&quot;"
+      case "'":
+        return "&#39;"
+      default:
+        return character
+    }
+  })
+}
+
+function buildPrintableResumeHtml(name: string, tags: string[], preview: ParsedPreview) {
+  const tagMarkup =
+    tags.length > 0
+      ? `<div class="tags">${tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}</div>`
+      : ""
+
+  const sectionMarkup = preview.sections
+    .map((section) => {
+      const linesMarkup =
+        section.lines.length > 0
+          ? section.lines
+              .map((line) => {
+                const isBullet = line.startsWith("- ")
+                const content = isBullet ? line.slice(2).trim() : line
+                return isBullet
+                  ? `<li><span class="bullet">•</span><span>${escapeHtml(content)}</span></li>`
+                  : `<li><span>${escapeHtml(content)}</span></li>`
+              })
+              .join("")
+          : `<li class="muted">No content yet.</li>`
+
+      return `
+        <section class="section">
+          <h2>${escapeHtml(section.title)}</h2>
+          <ul>${linesMarkup}</ul>
+        </section>
+      `
+    })
+    .join("")
+
+  return `
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>${escapeHtml(name)} - Resume PDF</title>
+        <style>
+          @page {
+            size: A4;
+            margin: 0.55in;
+          }
+
+          :root {
+            color-scheme: light;
+          }
+
+          * {
+            box-sizing: border-box;
+          }
+
+          body {
+            margin: 0;
+            color: #111827;
+            background: #ffffff;
+            font-family: Georgia, "Times New Roman", Times, serif;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+
+          .page {
+            max-width: 7.2in;
+            margin: 0 auto;
+            padding: 0;
+          }
+
+          header {
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #d1d5db;
+            margin-bottom: 1rem;
+          }
+
+          h1 {
+            margin: 0;
+            font-size: 30px;
+            line-height: 1.1;
+            letter-spacing: -0.02em;
+          }
+
+          .subtitle {
+            margin-top: 0.35rem;
+            font-size: 12px;
+            color: #6b7280;
+          }
+
+          .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+            margin-top: 0.65rem;
+          }
+
+          .tag {
+            display: inline-flex;
+            align-items: center;
+            border: 1px solid #cbd5e1;
+            border-radius: 9999px;
+            padding: 0.2rem 0.55rem;
+            font-size: 10px;
+            text-transform: capitalize;
+            background: #f8fafc;
+          }
+
+          .section {
+            margin-bottom: 1.1rem;
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+
+          .section h2 {
+            margin: 0 0 0.45rem;
+            padding-bottom: 0.25rem;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 12px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #6b7280;
+          }
+
+          ul {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+          }
+
+          li {
+            margin: 0 0 0.32rem;
+            font-size: 12.5px;
+            line-height: 1.45;
+          }
+
+          .bullet {
+            display: inline-block;
+            width: 0.9em;
+          }
+
+          .muted {
+            color: #6b7280;
+          }
+        </style>
+      </head>
+      <body>
+        <main class="page">
+          <header>
+            <h1>${escapeHtml(preview.name)}</h1>
+            <div class="subtitle">Generated from the live LaTeX workspace preview</div>
+            ${tagMarkup}
+          </header>
+          ${sectionMarkup}
+        </main>
+      </body>
+    </html>
+  `
+}
+
 export function ResumeEditorPage({ resumeId }: ResumeEditorPageProps) {
   const PREVIEW_BASE_WIDTH = 794
   const PREVIEW_BASE_MIN_HEIGHT = 1123
@@ -1032,6 +1206,61 @@ export function ResumeEditorPage({ resumeId }: ResumeEditorPageProps) {
     toast.success("Formatted active file")
   }, [activeFile])
 
+  const handleDownloadPdf = useCallback(() => {
+    if (typeof window === "undefined") {
+      return
+    }
+
+    const printableHtml = buildPrintableResumeHtml(name || resume?.name || "Resume", liveTags, parsedPreview)
+    const iframe = document.createElement("iframe")
+    iframe.style.position = "fixed"
+    iframe.style.right = "0"
+    iframe.style.bottom = "0"
+    iframe.style.width = "0"
+    iframe.style.height = "0"
+    iframe.style.border = "0"
+    iframe.style.visibility = "hidden"
+
+    const cleanup = () => {
+      window.setTimeout(() => {
+        iframe.remove()
+      }, 500)
+    }
+
+    iframe.onload = () => {
+      const frameWindow = iframe.contentWindow
+      if (!frameWindow) {
+        toast.error("Unable to open print preview")
+        cleanup()
+        return
+      }
+
+      try {
+        frameWindow.focus()
+        frameWindow.print()
+        toast.success("Print dialog opened. Choose Save as PDF")
+      } catch {
+        toast.error("Unable to start PDF download")
+      }
+
+      frameWindow.onafterprint = cleanup
+      window.setTimeout(cleanup, 8000)
+    }
+
+    document.body.appendChild(iframe)
+    const doc = iframe.contentDocument
+
+    if (!doc) {
+      toast.error("Unable to prepare printable document")
+      cleanup()
+      return
+    }
+
+    doc.open()
+    doc.write(printableHtml)
+    doc.close()
+  }, [name, parsedPreview, liveTags, resume?.name])
+
   const focusMatchInEditor = useCallback((start: number, length: number) => {
     const view = editorViewRef.current
     if (!view) {
@@ -1548,6 +1777,10 @@ export function ResumeEditorPage({ resumeId }: ResumeEditorPageProps) {
             <Button type="button" variant="outline" size="sm" onClick={handleFormatActiveFile}>
               <WandSparkles className="size-4" />
               Format File
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={handleDownloadPdf}>
+              <FileDown className="size-4" />
+              Download PDF
             </Button>
             <Button
               type="button"
@@ -2148,6 +2381,15 @@ export function ResumeEditorPage({ resumeId }: ResumeEditorPageProps) {
             >
               <WandSparkles className="size-4" />
               Format Active File
+            </CommandItem>
+            <CommandItem
+              onSelect={() => {
+                setCommandPaletteOpen(false)
+                handleDownloadPdf()
+              }}
+            >
+              <FileDown className="size-4" />
+              Download PDF
             </CommandItem>
             <CommandItem
               onSelect={() => {
