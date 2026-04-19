@@ -29,6 +29,7 @@ import {
   type ResumeRecord,
   type ResumeStatRecord,
   type StreakData,
+  type TaskRecord,
   type TopicBreakdownPoint,
   type TrackUserProblemInput,
   type UnknownRecord,
@@ -108,6 +109,13 @@ export async function getWeeklySolved() {
 
 export async function getTopicBreakdown() {
   const response = await api.get<ApiEnvelope<TopicBreakdownPoint[]>>("/analytics/topic-breakdown");
+  return normalizeResponse(response.data);
+}
+
+export async function getTasks(query?: { page?: number; limit?: number }) {
+  const response = await api.get<ApiEnvelope<PaginatedResponse<TaskRecord>>>(
+    withQuery("/planner/tasks", query),
+  );
   return normalizeResponse(response.data);
 }
 

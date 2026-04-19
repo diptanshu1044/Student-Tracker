@@ -6,11 +6,12 @@ interface ButtonProps {
   label: string;
   onPress: () => void;
   disabled?: boolean;
-  variant?: "primary" | "outline";
+  variant?: "primary" | "secondary" | "outline";
 }
 
 export function Button({ label, onPress, disabled, variant = "primary" }: ButtonProps) {
   const isOutline = variant === "outline";
+  const isSecondary = variant === "secondary";
 
   return (
     <Pressable
@@ -18,12 +19,19 @@ export function Button({ label, onPress, disabled, variant = "primary" }: Button
       disabled={disabled}
       style={({ pressed }) => [
         styles.button,
-        isOutline ? styles.outlineButton : styles.primaryButton,
+        isOutline ? styles.outlineButton : isSecondary ? styles.secondaryButton : styles.primaryButton,
         disabled && styles.disabled,
         pressed && !disabled && styles.pressed,
       ]}
     >
-      <Text style={[styles.text, isOutline ? styles.outlineText : styles.primaryText]}>{label}</Text>
+      <Text
+        style={[
+          styles.text,
+          isOutline ? styles.outlineText : isSecondary ? styles.secondaryText : styles.primaryText,
+        ]}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -41,12 +49,19 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.primary,
     borderColor: theme.colors.primary,
   },
+  secondaryButton: {
+    backgroundColor: theme.colors.secondary,
+    borderColor: theme.colors.border,
+  },
   outlineButton: {
     backgroundColor: "transparent",
     borderColor: theme.colors.border,
   },
   primaryText: {
-    color: theme.colors.primaryText,
+    color: theme.colors.primaryForeground,
+  },
+  secondaryText: {
+    color: theme.colors.secondaryForeground,
   },
   outlineText: {
     color: theme.colors.text,

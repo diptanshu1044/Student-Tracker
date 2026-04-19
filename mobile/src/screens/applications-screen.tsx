@@ -42,7 +42,7 @@ export function ApplicationsScreen() {
   };
 
   return (
-    <Screen>
+    <Screen appChrome>
       <Text style={styles.title}>Applications</Text>
 
       <Card title="Add Application">

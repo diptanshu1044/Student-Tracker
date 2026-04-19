@@ -43,7 +43,7 @@ export function ResumeScreen() {
   };
 
   return (
-    <Screen>
+    <Screen appChrome>
       <Text style={styles.title}>Resume</Text>
 
       <Card title="Upload">

@@ -64,7 +64,7 @@ export function PlannerScreen() {
   };
 
   return (
-    <Screen>
+    <Screen appChrome>
       <Text style={styles.title}>Planner</Text>
 
       <Card title="Profiles">

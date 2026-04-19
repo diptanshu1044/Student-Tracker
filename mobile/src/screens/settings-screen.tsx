@@ -46,7 +46,7 @@ export function SettingsScreen() {
   };
 
   return (
-    <Screen>
+    <Screen appChrome>
       <Text style={styles.title}>Settings</Text>
 
       <Card title="Account">

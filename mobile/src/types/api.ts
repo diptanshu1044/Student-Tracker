@@ -122,6 +122,18 @@ export type TrackUserProblemInput =
       notes?: string;
     };
 
+/** Legacy planner tasks list (`GET /planner/tasks`) — matches web dashboard Tasks card. */
+export interface TaskRecord {
+  _id: string;
+  title: string;
+  type: "dsa" | "job" | "study";
+  priority: "low" | "medium" | "high";
+  dueDate?: string;
+  completed: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type PlannerTaskStatus = "pending" | "completed" | "missed";
 
 export interface PlannerProfileRecord {

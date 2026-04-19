@@ -27,7 +27,7 @@ export function DetailScreen() {
   });
 
   return (
-    <Screen>
+    <Screen appChrome>
       <Text style={styles.title}>Details</Text>
       {!modulePath ? <EmptyState title="Unsupported module" description="This detail route is not mapped to a backend path." /> : null}
       {query.isLoading ? <LoadingState /> : null}

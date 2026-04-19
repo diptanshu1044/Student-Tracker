@@ -228,7 +228,7 @@ export function usePlannerMutations() {
 export function useResumeData() {
   const resumes = useQuery({
     queryKey: ["resume", "list"],
-    queryFn: getResumes,
+    queryFn: () => getResumes(),
   });
 
   const stats = useQuery({

@@ -3,6 +3,9 @@ import { Tabs } from "expo-router";
 
 import { theme } from "@/src/utils/theme";
 
+/**
+ * Tab order matches web `AppSidebar`: Dashboard → DSA → Planner → Applications → Resume → Settings.
+ */
 export default function TabsLayout() {
   return (
     <Tabs
@@ -10,6 +13,10 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: theme.colors.primary,
         tabBarInactiveTintColor: theme.colors.mutedText,
+        tabBarStyle: {
+          backgroundColor: theme.colors.surface,
+          borderTopColor: theme.colors.border,
+        },
       }}
     >
       <Tabs.Screen
@@ -23,21 +30,7 @@ export default function TabsLayout() {
         name="dsa-tracker"
         options={{
           title: "DSA",
-          tabBarIcon: ({ color, size }) => <Ionicons name="analytics-outline" color={color} size={size} />,
-        }}
-      />
-      <Tabs.Screen
-        name="applications"
-        options={{
-          title: "Apps",
-          tabBarIcon: ({ color, size }) => <Ionicons name="albums-outline" color={color} size={size} />,
-        }}
-      />
-      <Tabs.Screen
-        name="jobs"
-        options={{
-          title: "Jobs",
-          tabBarIcon: ({ color, size }) => <Ionicons name="briefcase-outline" color={color} size={size} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="code-slash-outline" color={color} size={size} />,
         }}
       />
       <Tabs.Screen
@@ -45,6 +38,13 @@ export default function TabsLayout() {
         options={{
           title: "Planner",
           tabBarIcon: ({ color, size }) => <Ionicons name="calendar-outline" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="applications"
+        options={{
+          title: "Apps",
+          tabBarIcon: ({ color, size }) => <Ionicons name="briefcase-outline" color={color} size={size} />,
         }}
       />
       <Tabs.Screen

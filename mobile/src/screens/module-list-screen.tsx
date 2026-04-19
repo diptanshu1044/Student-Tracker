@@ -17,7 +17,7 @@ export function ModuleListScreen({ moduleName, title }: ModuleListScreenProps) {
   const query = useModuleData(moduleName);
 
   return (
-    <Screen scroll={false}>
+    <Screen scroll={false} appChrome>
       <Text style={styles.title}>{title}</Text>
       {query.isLoading ? <LoadingState /> : null}
       {query.isError ? <EmptyState title="Could not load data" description={getApiErrorMessage(query.error)} /> : null}

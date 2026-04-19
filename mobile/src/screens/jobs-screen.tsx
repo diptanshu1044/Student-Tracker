@@ -43,7 +43,7 @@ export function JobsScreen() {
   };
 
   return (
-    <Screen>
+    <Screen appChrome>
       <Text style={styles.title}>Jobs</Text>
 
       <Card title="Add Job">

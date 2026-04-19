@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native";
+import { DarkTheme, ThemeProvider } from "@react-navigation/native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import "react-native-reanimated";
@@ -7,10 +7,22 @@ import "react-native-reanimated";
 import { AppProviders } from "@/src/components/app-providers";
 import { useAuth } from "@/src/hooks/use-auth";
 import { registerPushNotifications } from "@/src/services/notifications";
-import { useColorScheme } from "@/hooks/use-color-scheme";
+import { theme } from "@/src/utils/theme";
+
+const navigationTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    primary: theme.colors.primary,
+    background: theme.colors.background,
+    card: theme.colors.surface,
+    text: theme.colors.text,
+    border: theme.colors.border,
+    notification: theme.colors.primary,
+  },
+};
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
   const { bootstrap, hydrated } = useAuth();
 
   useEffect(() => {
@@ -25,13 +37,13 @@ export default function RootLayout() {
 
   return (
     <AppProviders>
-      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+      <ThemeProvider value={navigationTheme}>
         <Stack>
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="(auth)" options={{ headerShown: false }} />
           <Stack.Screen name="(app)" options={{ headerShown: false }} />
         </Stack>
-        <StatusBar style="auto" />
+        <StatusBar style="light" />
       </ThemeProvider>
     </AppProviders>
   );

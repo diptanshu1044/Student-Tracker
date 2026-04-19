@@ -51,7 +51,7 @@ export function DsaTrackerScreen() {
   };
 
   return (
-    <Screen>
+    <Screen appChrome>
       <Text style={styles.title}>DSA Tracker</Text>
 
       <Card title="Summary">
