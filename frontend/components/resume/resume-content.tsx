@@ -36,6 +36,7 @@ export function ResumeContent() {
       <ResumeGrid
         refreshToken={refreshToken}
         onCreateResume={() => setIsCreateDialogOpen(true)}
+        onResumeChanged={refreshResumes}
       />
 
       {/* Create Resume Dialog */}

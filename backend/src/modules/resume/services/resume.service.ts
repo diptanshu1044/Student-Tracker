@@ -4,7 +4,7 @@ import { JobApplicationModel } from "../../../models/job-application.model";
 import { ResumeModel } from "../../../models/resume.model";
 import { ResumeUsageModel } from "../../../models/resume-usage.model";
 import { AppError } from "../../../shared/utils/app-error";
-import { createSignedResumeFileUrl, uploadResumeContent, uploadResumeFile } from "./storage.service";
+import { createSignedResumeFileUrl, uploadResumeFile } from "./storage.service";
 
 type ListSort = "latest" | "most_used";
 
@@ -171,6 +171,10 @@ export async function createResume(input: CreateResumeInput) {
     throw new AppError("Either content or fileUrl is required", StatusCodes.BAD_REQUEST);
   }
 
+  if (input.content && input.fileUrl) {
+    throw new AppError("Provide either content or fileUrl, not both", StatusCodes.BAD_REQUEST);
+  }
+
   const normalizedName = input.name.trim();
   if (!normalizedName) {
     throw new AppError("Resume name is required", StatusCodes.BAD_REQUEST);
@@ -178,20 +182,11 @@ export async function createResume(input: CreateResumeInput) {
 
   const version = await getNextResumeVersion(input.userId, normalizedName);
 
-  const uploadedContent =
-    input.content && !input.fileUrl
-      ? await uploadResumeContent({
-          userId: input.userId,
-          resumeName: normalizedName,
-          content: input.content
-        })
-      : null;
-
   const created = await ResumeModel.create({
     userId: toObjectId(input.userId),
     name: normalizedName,
     content: input.content,
-    fileUrl: input.fileUrl ?? uploadedContent?.fileUrl,
+    fileUrl: input.fileUrl,
     tags: normalizeTags(input.tags),
     description: input.description?.trim(),
     version,
@@ -264,6 +259,12 @@ export async function updateResume(userId: string, resumeId: string, input: Upda
   }
 
   if (typeof input.content !== "undefined") {
+    if (existing.fileType || existing.fileUrl) {
+      throw new AppError(
+        "Cannot update source content for file-based resumes. Create a source resume instead.",
+        StatusCodes.CONFLICT
+      );
+    }
     updates.content = input.content;
   }
 

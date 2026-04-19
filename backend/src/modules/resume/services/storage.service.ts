@@ -17,16 +17,6 @@ interface UploadedFileResult {
   fileType: ResumeFileType;
 }
 
-interface UploadResumeContentInput {
-  userId: string;
-  resumeName: string;
-  content: Record<string, unknown> | string;
-}
-
-interface UploadedContentResult {
-  fileUrl: string;
-}
-
 const ALLOWED_MIME_TO_TYPE: Record<string, ResumeFileType> = {
   "application/pdf": "pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx"
@@ -129,50 +119,6 @@ async function uploadToS3(input: UploadResumeFileInput, fileType: ResumeFileType
   };
 }
 
-function serializeResumeContent(content: Record<string, unknown> | string) {
-  if (typeof content === "string") {
-    return {
-      body: content,
-      extension: ".tex",
-      contentType: "text/x-tex"
-    };
-  }
-
-  return {
-    body: JSON.stringify(content, null, 2),
-    extension: ".json",
-    contentType: "application/json"
-  };
-}
-
-async function uploadContentToS3(input: UploadResumeContentInput): Promise<UploadedContentResult> {
-  const s3 = getS3Client();
-  const serialized = serializeResumeContent(input.content);
-  const safeResumeName = sanitizeSegment(input.resumeName);
-  const key = `resumes/${sanitizeSegment(input.userId)}/created/${Date.now()}-${safeResumeName}${serialized.extension}`;
-
-  try {
-    await s3.send(
-      new PutObjectCommand({
-        Bucket: env.S3_BUCKET,
-        Key: key,
-        Body: serialized.body,
-        ContentType: serialized.contentType
-      })
-    );
-  } catch (error) {
-    logger.error({ error, bucket: env.S3_BUCKET, region: env.S3_REGION, key }, "S3 content upload failed");
-
-    throw new AppError(
-      "Resume content upload failed. Check S3 credentials, bucket permissions, and region configuration.",
-      StatusCodes.INTERNAL_SERVER_ERROR
-    );
-  }
-
-  return {
-    fileUrl: buildS3PublicUrl(key)
-  };
-}
 
 function extractS3KeyFromUrl(fileUrl: string) {
   const normalizedBucket = env.S3_BUCKET;
@@ -217,8 +163,4 @@ export async function createSignedResumeFileUrl(fileUrl: string) {
 export async function uploadResumeFile(input: UploadResumeFileInput): Promise<UploadedFileResult> {
   const fileType = resolveFileType(input.file);
   return uploadToS3(input, fileType);
-}
-
-export async function uploadResumeContent(input: UploadResumeContentInput): Promise<UploadedContentResult> {
-  return uploadContentToS3(input);
 }
