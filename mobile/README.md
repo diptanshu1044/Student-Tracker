@@ -1,50 +1,56 @@
-# Welcome to your Expo app 👋
+# StudentOS Mobile (Expo)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+## Start with Expo Go (physical device)
 
-## Get started
-
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+1. Install dependencies:
 
 ```bash
-npm run reset-project
+npm install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+2. Start Metro:
 
-## Learn more
+```bash
+npx expo start
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+3. Open Expo Go on your phone and scan the QR code.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+If your phone cannot connect on local network, use tunnel mode:
 
-## Join the community
+```bash
+npx expo start --tunnel
+```
 
-Join our community of developers creating universal apps.
+## Important: `npm run android` vs Expo Go
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- `npm run android` runs `expo start --android`, which requires Android SDK and `adb` on your machine.
+- Expo Go on a real device does not require Android SDK.
+- If you only want Expo Go, use `npm start` or `npx expo start`.
+
+## Backend URL in Expo Go
+
+- The app will use `EXPO_PUBLIC_API_BASE_URL` if provided.
+- If not provided, it auto-detects your dev machine host from Expo and falls back to `http://<your-machine-ip>:8080/api/v1` during development.
+- Final fallback is `http://localhost:8080/api/v1`.
+
+To force a custom backend URL:
+
+```bash
+EXPO_PUBLIC_API_BASE_URL=http://192.168.1.25:8080/api/v1 npx expo start
+```
+
+## If you also want Android emulator/device via adb
+
+Install Android Studio + SDK + platform-tools, then set environment variables in your shell profile:
+
+```bash
+export ANDROID_HOME=$HOME/Library/Android/sdk
+export PATH=$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator
+```
+
+Then restart terminal and run:
+
+```bash
+npm run android
+```
