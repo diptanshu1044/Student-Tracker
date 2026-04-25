@@ -4,25 +4,39 @@ import { sendDueJobReminders } from "./jobReminder.cron";
 import { sendDuePlannerReminders } from "../modules/planner/services/notification.service";
 
 export function startCronJobs() {
-  cron.schedule("* * * * *", async () => {
-    try {
-      const result = await sendDuePlannerReminders();
-      if (result.scanned > 0) {
-        logger.info({ result }, "Planner reminder cron executed");
+  cron.schedule(
+    "* * * * *",
+    async () => {
+      try {
+        const result = await sendDuePlannerReminders();
+        if (result.scanned > 0) {
+          logger.info({ result }, "Planner reminder cron executed");
+        }
+      } catch (error) {
+        logger.error({ error }, "Planner reminder cron failed");
       }
-    } catch (error) {
-      logger.error({ error }, "Planner reminder cron failed");
+    },
+    {
+      name: "planner-reminder-cron",
+      noOverlap: true
     }
-  });
+  );
 
-  cron.schedule("0 * * * *", async () => {
-    try {
-      const result = await sendDueJobReminders();
-      if (result.scanned > 0) {
-        logger.info({ result }, "Job reminder cron executed");
+  cron.schedule(
+    "0 * * * *",
+    async () => {
+      try {
+        const result = await sendDueJobReminders();
+        if (result.scanned > 0) {
+          logger.info({ result }, "Job reminder cron executed");
+        }
+      } catch (error) {
+        logger.error({ error }, "Job reminder cron failed");
       }
-    } catch (error) {
-      logger.error({ error }, "Job reminder cron failed");
+    },
+    {
+      name: "job-reminder-cron",
+      noOverlap: true
     }
-  });
+  );
 }

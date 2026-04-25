@@ -136,6 +136,8 @@ export const plannerRouter = Router();
 
 plannerRouter.get("/google/callback", googleCallbackController);
 plannerRouter.use(authGuard);
+plannerRouter.get("/google/connect", googleConnectController);
+plannerRouter.post("/google/disconnect", googleDisconnectController);
 plannerRouter.use(emailVerifiedGuard);
 
 plannerRouter.get("/profiles", listPlannerProfilesController);
@@ -172,8 +174,6 @@ plannerRouter.post(
   importPlannerTasksController
 );
 
-plannerRouter.get("/google/connect", googleConnectController);
-plannerRouter.post("/google/disconnect", googleDisconnectController);
 plannerRouter.post("/google/sync", validate(googleSyncSchema), googleSyncController);
 
 plannerRouter.get("/tasks", listTasksController);

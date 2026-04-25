@@ -267,6 +267,13 @@ export interface AuthUser {
   email: string
   emailVerified?: boolean
   googleCalendarConnected?: boolean
+  notificationPreferences?: {
+    email: boolean
+    streak: boolean
+    applications: boolean
+    weekly: boolean
+    plannerReminders: boolean
+  }
 }
 
 export interface AuthTokens {
@@ -516,8 +523,61 @@ export async function getMe() {
 }
 
 export async function resendVerificationEmail() {
-  return apiRequest<{ sent: boolean; reason?: "already_verified" }>("/auth/resend-verification", {
+  return apiRequest<{ sent: boolean; reason?: "already_verified" | "mock_enabled" }>("/auth/resend-verification", {
     method: "POST",
+  })
+}
+
+export async function verifyEmailToken(token: string) {
+  return apiRequest<{ verified: true }>(withQuery("/auth/verify-email", { token }), {
+    auth: false,
+  })
+}
+
+export async function updateMe(input: { name: string }) {
+  return apiRequest<AuthUser>("/auth/me", {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  })
+}
+
+export async function updateNotificationPreferences(input: {
+  email?: boolean
+  streak?: boolean
+  applications?: boolean
+  weekly?: boolean
+  plannerReminders?: boolean
+}) {
+  return apiRequest<AuthUser>("/auth/notification-preferences", {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  })
+}
+
+export async function forgotPassword(input: { email: string }) {
+  return apiRequest<{ sent: true }>("/auth/forgot-password", {
+    method: "POST",
+    auth: false,
+    body: JSON.stringify(input),
+  })
+}
+
+export async function resetPassword(input: { token: string; password: string }) {
+  return apiRequest<{ reset: true }>("/auth/reset-password", {
+    method: "POST",
+    auth: false,
+    body: JSON.stringify(input),
+  })
+}
+
+export async function changePassword(input: {
+  oldPassword: string
+  newPassword: string
+  confirmNewPassword: string
+}) {
+  return apiRequest<{ updated: true }>("/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify(input),
   })
 }
 

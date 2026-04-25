@@ -188,6 +188,7 @@ export async function createPlannerTask(input: CreatePlannerTaskInput) {
     priority: input.priority,
     status: input.status ?? "pending",
     reminderTime,
+    notified: false,
     source: "manual"
   });
 
@@ -216,6 +217,10 @@ export async function updatePlannerTask(input: UpdatePlannerTaskInput) {
       ? new Date(input.reminderTime)
       : undefined;
 
+  const reminderChanged = input.reminderTime !== undefined && (
+    (current.reminderTime?.getTime() ?? null) !== (reminderTime?.getTime() ?? null)
+  );
+
   if (input.reminderTime && Number.isNaN(reminderTime!.getTime())) {
     throw new AppError("reminderTime must be a valid ISO datetime", StatusCodes.BAD_REQUEST);
   }
@@ -233,7 +238,8 @@ export async function updatePlannerTask(input: UpdatePlannerTaskInput) {
         ...(input.status !== undefined ? { status: input.status } : {}),
         ...(input.startTime !== undefined ? { startTime: nextStart } : {}),
         ...(input.endTime !== undefined ? { endTime: nextEnd } : {}),
-        ...(input.reminderTime !== undefined ? { reminderTime } : {})
+        ...(input.reminderTime !== undefined ? { reminderTime } : {}),
+        ...(reminderChanged ? { notified: false } : {})
       }
     },
     { new: true }

@@ -3,11 +3,16 @@ import { StatusCodes } from "http-status-codes";
 import { asyncHandler } from "../../shared/utils/async-handler";
 import { ok } from "../../shared/utils/api-response";
 import {
+  changeCurrentUserPassword,
   getCurrentUser,
   loginUser,
+  requestPasswordReset,
   registerUser,
   resendEmailVerification,
+  resetPasswordWithToken,
   rotateRefreshToken,
+  updateCurrentUser,
+  updateNotificationPreferences,
   verifyEmailToken
 } from "./auth.service";
 
@@ -38,5 +43,30 @@ export const resendVerificationController = asyncHandler(async (req: Request, re
 
 export const meController = asyncHandler(async (req: Request, res: Response) => {
   const data = await getCurrentUser(req.user!.id);
+  res.status(StatusCodes.OK).json(ok(data));
+});
+
+export const updateMeController = asyncHandler(async (req: Request, res: Response) => {
+  const data = await updateCurrentUser(req.user!.id, req.body);
+  res.status(StatusCodes.OK).json(ok(data));
+});
+
+export const updateNotificationPreferencesController = asyncHandler(async (req: Request, res: Response) => {
+  const data = await updateNotificationPreferences(req.user!.id, req.body);
+  res.status(StatusCodes.OK).json(ok(data));
+});
+
+export const forgotPasswordController = asyncHandler(async (req: Request, res: Response) => {
+  const data = await requestPasswordReset(req.body.email);
+  res.status(StatusCodes.OK).json(ok(data));
+});
+
+export const resetPasswordController = asyncHandler(async (req: Request, res: Response) => {
+  const data = await resetPasswordWithToken(req.body.token, req.body.password);
+  res.status(StatusCodes.OK).json(ok(data));
+});
+
+export const changePasswordController = asyncHandler(async (req: Request, res: Response) => {
+  const data = await changeCurrentUserPassword(req.user!.id, req.body.oldPassword, req.body.newPassword);
   res.status(StatusCodes.OK).json(ok(data));
 });

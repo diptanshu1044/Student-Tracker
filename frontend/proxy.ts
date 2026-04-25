@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
 const AUTH_COOKIE_NAME = "studentos_logged_in"
-const PUBLIC_PATHS = ["/login"]
+const PUBLIC_PATHS = ["/login", "/verify-email", "/reset-password"]
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl

@@ -131,11 +131,26 @@ Applied indexes prioritize read-heavy filters:
   - For Upstash, set REDIS_URL using the TLS URL from your Upstash dashboard:
     rediss://default:<UPSTASH_REDIS_PASSWORD>@<UPSTASH_REDIS_HOST>:6379
   - For Brevo email delivery, set BREVO_SMTP_USER and BREVO_SMTP_PASS in .env.
+  - For dev email diagnostics endpoint, set EMAIL_DEBUG_KEY in .env.
   - For S3 resume uploads in local development, provide AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY (or use another valid AWS credential source).
 2. Install dependencies:
    npm install
 3. Run development server:
    npm run dev
+
+## Email Diagnostics (Dev Only)
+
+- Endpoint: GET /health/email
+- Available only when NODE_ENV=development
+- Protected with EMAIL_DEBUG_KEY via either:
+  - Header: x-email-debug-key: <your key>
+  - Query: ?key=<your key>
+- Optional recipient query: ?to=<email>
+  - If omitted, BREVO_SMTP_USER is used.
+
+Example:
+
+curl "http://localhost:8080/health/email?key=your_debug_key&to=you@example.com"
 
 ## Deployment
 

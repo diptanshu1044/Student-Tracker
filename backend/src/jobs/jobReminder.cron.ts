@@ -6,19 +6,39 @@ import { UserModel } from "../models/user.model";
 import { sendMail } from "../shared/utils/mailer";
 import { logger } from "../config/logger";
 
+const MAX_JOB_REMINDERS_PER_TYPE_PER_RUN = 200;
+const JOB_REMINDER_BATCH_SIZE = 20;
+
+async function runInBatches<T>(
+  items: T[],
+  batchSize: number,
+  worker: (item: T) => Promise<void>
+) {
+  for (let index = 0; index < items.length; index += batchSize) {
+    const batch = items.slice(index, index + batchSize);
+    await Promise.all(batch.map((item) => worker(item)));
+  }
+}
+
 export async function sendDueJobReminders(now = new Date()) {
   const followUpDue = await JobApplicationModel.find({
     followUpDate: { $lte: now },
     followUpNotified: false,
     status: { $nin: ["offer", "rejected"] }
-  }).lean();
+  })
+    .sort({ followUpDate: 1 })
+    .limit(MAX_JOB_REMINDERS_PER_TYPE_PER_RUN)
+    .lean();
 
   const interviewWindowEnd = new Date(now.getTime() + 60 * 60 * 1000);
   const interviewDue = await JobApplicationModel.find({
     interviewDate: { $gte: now, $lte: interviewWindowEnd },
     interviewNotified: false,
     status: { $nin: ["offer", "rejected"] }
-  }).lean();
+  })
+    .sort({ interviewDate: 1 })
+    .limit(MAX_JOB_REMINDERS_PER_TYPE_PER_RUN)
+    .lean();
 
   const applicationDeadlineWindowEnd = new Date(
     now.getTime() + env.APPLICATION_DEADLINE_REMINDER_WINDOW_HOURS * 60 * 60 * 1000
@@ -28,7 +48,10 @@ export async function sendDueJobReminders(now = new Date()) {
     status: "to_apply",
     lastDateToApply: { $gte: now, $lte: applicationDeadlineWindowEnd },
     lastDateToApplyNotified: { $ne: true }
-  }).lean();
+  })
+    .sort({ lastDateToApply: 1 })
+    .limit(MAX_JOB_REMINDERS_PER_TYPE_PER_RUN)
+    .lean();
 
   const dueApplications = [...followUpDue, ...interviewDue];
   const totalScanned = dueApplications.length + applicationDeadlinesDue.length;
@@ -68,10 +91,10 @@ export async function sendDueJobReminders(now = new Date()) {
   let interviewNotifiedCount = 0;
   let applicationDeadlineNotifiedCount = 0;
 
-  for (const application of followUpDue) {
+  await runInBatches(followUpDue, JOB_REMINDER_BATCH_SIZE, async (application) => {
     const user = userById.get(application.userId.toString());
     if (!user) {
-      continue;
+      return;
     }
 
     try {
@@ -90,12 +113,12 @@ export async function sendDueJobReminders(now = new Date()) {
     } catch (error) {
       logger.error({ error, applicationId: application._id.toString() }, "Job follow-up reminder failed");
     }
-  }
+  });
 
-  for (const application of interviewDue) {
+  await runInBatches(interviewDue, JOB_REMINDER_BATCH_SIZE, async (application) => {
     const user = userById.get(application.userId.toString());
     if (!user) {
-      continue;
+      return;
     }
 
     try {
@@ -114,12 +137,12 @@ export async function sendDueJobReminders(now = new Date()) {
     } catch (error) {
       logger.error({ error, applicationId: application._id.toString() }, "Job interview reminder failed");
     }
-  }
+  });
 
-  for (const application of applicationDeadlinesDue) {
+  await runInBatches(applicationDeadlinesDue, JOB_REMINDER_BATCH_SIZE, async (application) => {
     const user = userById.get(application.userId.toString());
     if (!user) {
-      continue;
+      return;
     }
 
     try {
@@ -141,13 +164,17 @@ export async function sendDueJobReminders(now = new Date()) {
         "Application deadline reminder failed"
       );
     }
-  }
+  });
 
   return {
     scanned: totalScanned,
     followUpNotified: followUpNotifiedCount,
     interviewNotified: interviewNotifiedCount,
     applicationDeadlineNotified: applicationDeadlineNotifiedCount,
-    mockMode: false
+    mockMode: false,
+    remainingPossibleBacklog:
+      followUpDue.length === MAX_JOB_REMINDERS_PER_TYPE_PER_RUN ||
+      interviewDue.length === MAX_JOB_REMINDERS_PER_TYPE_PER_RUN ||
+      applicationDeadlinesDue.length === MAX_JOB_REMINDERS_PER_TYPE_PER_RUN
   };
 }

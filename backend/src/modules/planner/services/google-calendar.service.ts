@@ -61,6 +61,19 @@ export function getGoogleConnectUrl(userId: string) {
 }
 
 export async function disconnectGoogleCalendar(userId: string) {
+  const user = await UserModel.findById(userId).select("googleTokens").lean();
+
+  if (user?.googleTokens) {
+    try {
+      const oauthClient = getOAuthClient();
+      const tokens = decryptJson<StoredGoogleTokens>(user.googleTokens);
+      oauthClient.setCredentials(tokens);
+      await oauthClient.revokeCredentials();
+    } catch {
+      // Ignore revoke/decrypt failures and proceed with local disconnect.
+    }
+  }
+
   await UserModel.findByIdAndUpdate(userId, {
     $set: {
       googleCalendarConnected: false
@@ -97,7 +110,26 @@ async function getCalendarClientForUser(userId: string) {
   }
 
   const oauthClient = getOAuthClient();
-  const tokens = decryptJson<StoredGoogleTokens>(user.googleTokens);
+  let tokens: StoredGoogleTokens;
+
+  try {
+    tokens = decryptJson<StoredGoogleTokens>(user.googleTokens);
+  } catch {
+    await UserModel.findByIdAndUpdate(userId, {
+      $set: { googleCalendarConnected: false },
+      $unset: { googleTokens: 1 }
+    });
+    return null;
+  }
+
+  if (!tokens.access_token && !tokens.refresh_token) {
+    await UserModel.findByIdAndUpdate(userId, {
+      $set: { googleCalendarConnected: false },
+      $unset: { googleTokens: 1 }
+    });
+    return null;
+  }
+
   oauthClient.setCredentials(tokens);
 
   return google.calendar({ version: "v3", auth: oauthClient });

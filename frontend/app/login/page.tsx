@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { hasAccessToken, login, register, setAuthSession } from "@/lib/api"
+import { forgotPassword, hasAccessToken, login, register, setAuthSession } from "@/lib/api"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -16,6 +16,10 @@ export default function LoginPage() {
   const [form, setForm] = useState({ name: "", email: "", password: "" })
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
+  const [forgotEmail, setForgotEmail] = useState("")
+  const [forgotLoading, setForgotLoading] = useState(false)
+  const [forgotMessage, setForgotMessage] = useState<string | null>(null)
 
   useEffect(() => {
     if (hasAccessToken()) {
@@ -46,6 +50,26 @@ export default function LoginPage() {
       setError(requestError instanceof Error ? requestError.message : "Authentication failed")
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const handleForgotPassword = async () => {
+    const email = forgotEmail.trim() || form.email.trim()
+    if (!email) {
+      setForgotMessage("Please enter your email address.")
+      return
+    }
+
+    setForgotLoading(true)
+    setForgotMessage(null)
+
+    try {
+      await forgotPassword({ email })
+      setForgotMessage("If an account exists, a password reset link has been sent to your email.")
+    } catch (requestError) {
+      setForgotMessage(requestError instanceof Error ? requestError.message : "Failed to send reset email")
+    } finally {
+      setForgotLoading(false)
     }
   }
 
@@ -110,6 +134,44 @@ export default function LoginPage() {
             <Button className="w-full" disabled={isSubmitting} onClick={() => void handleSubmit()}>
               {isSubmitting ? "Please wait..." : mode === "login" ? "Login" : "Register"}
             </Button>
+
+            <Button
+              type="button"
+              variant="link"
+              className="w-full"
+              onClick={() => {
+                setShowForgotPassword((value) => !value)
+                setForgotMessage(null)
+                if (!forgotEmail && form.email) {
+                  setForgotEmail(form.email)
+                }
+              }}
+            >
+              Forgot Password?
+            </Button>
+
+            {showForgotPassword ? (
+              <div className="space-y-2 rounded-md border p-3">
+                <Label htmlFor="forgotEmail">Enter your email</Label>
+                <Input
+                  id="forgotEmail"
+                  type="email"
+                  value={forgotEmail}
+                  onChange={(event) => setForgotEmail(event.target.value)}
+                  placeholder="you@example.com"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  disabled={forgotLoading}
+                  onClick={() => void handleForgotPassword()}
+                >
+                  {forgotLoading ? "Please wait..." : "Send Reset Link"}
+                </Button>
+                {forgotMessage ? <p className="text-xs text-muted-foreground">{forgotMessage}</p> : null}
+              </div>
+            ) : null}
 
             <p className="text-center text-xs text-muted-foreground">
               Use your backend auth credentials. API URL: {process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080/api/v1"}

@@ -3,10 +3,12 @@ import crypto from "crypto";
 import { StatusCodes } from "http-status-codes";
 import { env } from "../../config/env";
 import { EmailVerificationTokenModel } from "../../models/email-verification-token.model";
+import { PasswordResetTokenModel } from "../../models/password-reset-token.model";
 import { RefreshTokenModel } from "../../models/refresh-token.model";
 import { UserModel } from "../../models/user.model";
 import { sendMail } from "../../shared/utils/mailer";
 import { AppError } from "../../shared/utils/app-error";
+import { decryptJson } from "../../shared/utils/crypto";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../../shared/utils/jwt";
 
 interface RegisterInput {
@@ -18,6 +20,20 @@ interface RegisterInput {
 interface LoginInput {
   email: string;
   password: string;
+}
+
+interface NotificationPreferencesInput {
+  email?: boolean;
+  streak?: boolean;
+  applications?: boolean;
+  weekly?: boolean;
+  plannerReminders?: boolean;
+}
+
+interface StoredGoogleTokens {
+  access_token?: string;
+  refresh_token?: string;
+  expiry_date?: number;
 }
 
 function hashToken(token: string): string {
@@ -33,6 +49,51 @@ function getRefreshExpiryDate(): Date {
   const now = Date.now();
   const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
   return new Date(now + sevenDaysMs);
+}
+
+function getPasswordResetExpiryDate(): Date {
+  const ttlMs = 60 * 60 * 1000;
+  return new Date(Date.now() + ttlMs);
+}
+
+function normalizeNotificationPreferences(prefs?: NotificationPreferencesInput) {
+  return {
+    email: prefs?.email ?? true,
+    streak: prefs?.streak ?? true,
+    applications: prefs?.applications ?? true,
+    weekly: prefs?.weekly ?? false,
+    plannerReminders: prefs?.plannerReminders ?? true
+  };
+}
+
+function toUserPayload(user: {
+  _id: { toString(): string };
+  name: string;
+  email: string;
+  emailVerified: boolean;
+  googleCalendarConnected?: boolean;
+  googleTokens?: string;
+  notificationPreferences?: NotificationPreferencesInput;
+}) {
+  let googleCalendarConnected = false;
+
+  if (user.googleCalendarConnected && user.googleTokens) {
+    try {
+      const tokens = decryptJson<StoredGoogleTokens>(user.googleTokens);
+      googleCalendarConnected = Boolean(tokens.access_token || tokens.refresh_token);
+    } catch {
+      googleCalendarConnected = false;
+    }
+  }
+
+  return {
+    id: user._id,
+    name: user.name,
+    email: user.email,
+    emailVerified: user.emailVerified,
+    googleCalendarConnected,
+    notificationPreferences: normalizeNotificationPreferences(user.notificationPreferences)
+  };
 }
 
 async function persistRefreshToken(userId: string, refreshToken: string): Promise<void> {
@@ -52,7 +113,7 @@ async function sendEmailVerification(user: { _id: { toString(): string }; name: 
     expiresAt: getEmailVerificationExpiryDate()
   });
 
-  const verificationLink = `${env.APP_BASE_URL.replace(/\/$/, "")}/api/v1/auth/verify-email?token=${rawToken}`;
+  const verificationLink = `${env.APP_BASE_URL.replace(/\/$/, "")}/verify-email?token=${rawToken}`;
 
   await sendMail({
     to: user.email,
@@ -85,13 +146,7 @@ export async function registerUser(input: RegisterInput) {
   await persistRefreshToken(user._id.toString(), refreshToken);
 
   return {
-    user: {
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      emailVerified: user.emailVerified,
-      googleCalendarConnected: user.googleCalendarConnected
-    },
+    user: toUserPayload(user),
     tokens: {
       accessToken,
       refreshToken
@@ -115,13 +170,7 @@ export async function loginUser(input: LoginInput) {
   await persistRefreshToken(user._id.toString(), refreshToken);
 
   return {
-    user: {
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      emailVerified: user.emailVerified,
-      googleCalendarConnected: user.googleCalendarConnected
-    },
+    user: toUserPayload(user),
     tokens: {
       accessToken,
       refreshToken
@@ -194,17 +243,143 @@ export async function resendEmailVerification(userId: string) {
 }
 
 export async function getCurrentUser(userId: string) {
-  const user = await UserModel.findById(userId).select("name email emailVerified googleCalendarConnected");
+  const user = await UserModel.findById(userId)
+    .select("name email emailVerified googleCalendarConnected googleTokens notificationPreferences");
 
   if (!user) {
     throw new AppError("User not found", StatusCodes.NOT_FOUND);
   }
 
-  return {
-    id: user._id,
-    name: user.name,
-    email: user.email,
-    emailVerified: user.emailVerified,
-    googleCalendarConnected: user.googleCalendarConnected
-  };
+  return toUserPayload(user);
+}
+
+export async function updateCurrentUser(userId: string, input: { name?: string }) {
+  const name = input.name?.trim();
+
+  if (!name) {
+    throw new AppError("Name is required", StatusCodes.BAD_REQUEST);
+  }
+
+  const updated = await UserModel.findByIdAndUpdate(
+    userId,
+    { $set: { name } },
+    { new: true }
+  ).select("name email emailVerified googleCalendarConnected googleTokens notificationPreferences");
+
+  if (!updated) {
+    throw new AppError("User not found", StatusCodes.NOT_FOUND);
+  }
+
+  return toUserPayload(updated);
+}
+
+export async function updateNotificationPreferences(userId: string, input: NotificationPreferencesInput) {
+  const patch: Record<string, boolean> = {};
+
+  if (input.email !== undefined) {
+    patch["notificationPreferences.email"] = input.email;
+  }
+
+  if (input.streak !== undefined) {
+    patch["notificationPreferences.streak"] = input.streak;
+  }
+
+  if (input.applications !== undefined) {
+    patch["notificationPreferences.applications"] = input.applications;
+  }
+
+  if (input.weekly !== undefined) {
+    patch["notificationPreferences.weekly"] = input.weekly;
+  }
+
+  if (input.plannerReminders !== undefined) {
+    patch["notificationPreferences.plannerReminders"] = input.plannerReminders;
+  }
+
+  const updated = await UserModel.findByIdAndUpdate(
+    userId,
+    Object.keys(patch).length > 0 ? { $set: patch } : {},
+    { new: true }
+  ).select("name email emailVerified googleCalendarConnected googleTokens notificationPreferences");
+
+  if (!updated) {
+    throw new AppError("User not found", StatusCodes.NOT_FOUND);
+  }
+
+  return toUserPayload(updated);
+}
+
+export async function requestPasswordReset(email: string) {
+  const user = await UserModel.findOne({ email: email.toLowerCase().trim() }).select("name email");
+
+  if (!user) {
+    return { sent: true as const };
+  }
+
+  const rawToken = crypto.randomBytes(32).toString("hex");
+
+  await PasswordResetTokenModel.deleteMany({ userId: user._id });
+
+  await PasswordResetTokenModel.create({
+    userId: user._id,
+    tokenHash: hashToken(rawToken),
+    expiresAt: getPasswordResetExpiryDate()
+  });
+
+  const resetLink = `${env.APP_BASE_URL.replace(/\/$/, "")}/reset-password?token=${rawToken}`;
+
+  await sendMail({
+    to: user.email,
+    subject: "Reset your StudentOS password",
+    text: `Hi ${user.name},\n\nUse this link to reset your password:\n${resetLink}\n\nThis link expires in 60 minutes.`
+  });
+
+  return { sent: true as const };
+}
+
+export async function resetPasswordWithToken(rawToken: string, password: string) {
+  const tokenHash = hashToken(rawToken);
+
+  const resetToken = await PasswordResetTokenModel.findOne({
+    tokenHash,
+    usedAt: { $exists: false },
+    expiresAt: { $gt: new Date() }
+  });
+
+  if (!resetToken) {
+    throw new AppError("Invalid or expired password reset token", StatusCodes.BAD_REQUEST);
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 12);
+
+  await Promise.all([
+    UserModel.updateOne({ _id: resetToken.userId }, { $set: { password: hashedPassword } }),
+    PasswordResetTokenModel.updateOne({ _id: resetToken._id }, { $set: { usedAt: new Date() } }),
+    PasswordResetTokenModel.deleteMany({ userId: resetToken.userId, _id: { $ne: resetToken._id } }),
+    RefreshTokenModel.deleteMany({ userId: resetToken.userId })
+  ]);
+
+  return { reset: true as const };
+}
+
+export async function changeCurrentUserPassword(userId: string, oldPassword: string, newPassword: string) {
+  const user = await UserModel.findById(userId).select("password");
+
+  if (!user) {
+    throw new AppError("User not found", StatusCodes.NOT_FOUND);
+  }
+
+  const isValidOldPassword = await bcrypt.compare(oldPassword, user.password);
+  if (!isValidOldPassword) {
+    throw new AppError("Old password is incorrect", StatusCodes.BAD_REQUEST);
+  }
+
+  const hashedNewPassword = await bcrypt.hash(newPassword, 12);
+
+  await Promise.all([
+    UserModel.updateOne({ _id: userId }, { $set: { password: hashedNewPassword } }),
+    RefreshTokenModel.deleteMany({ userId })
+  ]);
+
+  return { updated: true as const };
 }

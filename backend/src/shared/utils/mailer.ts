@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import { env } from "../../config/env";
+import { logger } from "../../config/logger";
 
 let transporter: nodemailer.Transporter | null = null;
 
@@ -21,8 +22,9 @@ function getTransporter() {
     return transporter;
   }
 
-  transporter = nodemailer.createTransport({ jsonTransport: true });
-  return transporter;
+  throw new Error(
+    "SMTP is not configured. Set BREVO_SMTP_USER and BREVO_SMTP_PASS in backend/.env"
+  );
 }
 
 export async function sendMail(input: {
@@ -33,11 +35,42 @@ export async function sendMail(input: {
 }) {
   const currentTransporter = getTransporter();
 
-  await currentTransporter.sendMail({
-    from: env.BREVO_FROM,
-    to: input.to,
-    subject: input.subject,
-    text: input.text,
-    html: input.html
-  });
+  try {
+    const info = await currentTransporter.sendMail({
+      from: env.BREVO_FROM,
+      to: input.to,
+      subject: input.subject,
+      text: input.text,
+      html: input.html
+    });
+
+    logger.info(
+      {
+        to: input.to,
+        subject: input.subject,
+        accepted: info.accepted,
+        rejected: info.rejected,
+        response: info.response,
+        messageId: info.messageId
+      },
+      "Email queued by SMTP provider"
+    );
+
+    return {
+      accepted: info.accepted,
+      rejected: info.rejected,
+      response: info.response,
+      messageId: info.messageId
+    };
+  } catch (error) {
+    logger.error(
+      {
+        to: input.to,
+        subject: input.subject,
+        error: error instanceof Error ? error.message : "unknown"
+      },
+      "Failed to send email"
+    );
+    throw error;
+  }
 }

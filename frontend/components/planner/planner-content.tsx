@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { usePlannerMutations, usePlannerProfiles, useGlobalPlanner, usePlannerTasks } from "@/hooks/use-planner"
-import { getAuthUser, getGooglePlannerConnectUrl } from "@/lib/api"
+import { getAuthUser, getGooglePlannerConnectUrl, getMe, setAuthUser } from "@/lib/api"
 import { toast } from "sonner"
 import { WeeklyCalendar } from "./weekly-calendar"
 import { TaskList } from "./task-list"
@@ -105,20 +105,49 @@ export function PlannerContent() {
   const visiblePlannerItems = selectedProfileId ? scopedPlanner?.items ?? [] : globalPlanner?.items ?? []
 
   useEffect(() => {
+    let active = true
+
     const google = searchParams.get("google")
-    if (google === "connected") {
-      toast.success("Google Calendar connected")
-      setIsGoogleConnected(true)
-      const pending = window.sessionStorage.getItem(GOOGLE_PENDING_SYNC_KEY)
-      if (pending) {
-        setPendingGoogleSync(pending)
-        window.sessionStorage.removeItem(GOOGLE_PENDING_SYNC_KEY)
+    const hydrateGoogleStatus = async () => {
+      if (google === "connected") {
+        try {
+          const me = await getMe()
+          if (!active) {
+            return
+          }
+
+          setAuthUser(me)
+          setIsGoogleConnected(Boolean(me.googleCalendarConnected))
+
+          if (me.googleCalendarConnected) {
+            toast.success("Google Calendar connected")
+            const pending = window.sessionStorage.getItem(GOOGLE_PENDING_SYNC_KEY)
+            if (pending) {
+              setPendingGoogleSync(pending)
+              window.sessionStorage.removeItem(GOOGLE_PENDING_SYNC_KEY)
+            }
+          } else {
+            toast.error("Google Calendar connection is not active. Please reconnect.")
+          }
+        } catch {
+          if (active) {
+            setIsGoogleConnected(false)
+            toast.error("Failed to refresh Google Calendar connection status")
+          }
+        }
+
+        return
       }
-      return
+
+      if (google === "error") {
+        toast.error("Google Calendar connection failed")
+      }
     }
 
-    if (google === "error") {
-      toast.error("Google Calendar connection failed")
+    void hydrateGoogleStatus()
+
+    return () => {
+      active = false
     }
   }, [searchParams])
 
